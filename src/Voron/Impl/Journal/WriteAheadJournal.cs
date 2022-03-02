@@ -104,6 +104,22 @@ namespace Voron.Impl.Journal
             });
         }
 
+        ~WriteAheadJournal()
+        {
+            if (_logger?.IsOperationsEnabled == true)
+                _logger.Operations($"{_env.Options.BasePath.FullPath}: WriteAheadJournal was not disposed)");
+
+            try
+            {
+                Dispose();
+            }
+            catch (Exception e)
+            {
+                if (_logger?.IsOperationsEnabled == true)
+                    _logger.Operations($"{_env.Options.BasePath.FullPath}: Could not dispose WriteAheadJournal from destructor", e);
+            }
+        }
+
         public ImmutableAppendOnlyList<JournalFile> Files => _files;
 
         public JournalApplicator Applicator => _journalApplicator;
@@ -466,6 +482,8 @@ namespace Voron.Impl.Journal
 
         public void Dispose()
         {
+            GC.SuppressFinalize(this);
+
             _disposeRunner.Dispose();
         }
 

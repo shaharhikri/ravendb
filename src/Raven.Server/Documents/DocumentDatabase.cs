@@ -92,6 +92,8 @@ namespace Raven.Server.Documents
         public string DatabaseGroupId;
         public string ClusterTransactionId;
 
+        private bool _initialized;
+
         public readonly ClusterTransactionWaiter ClusterTransactionWaiter;
 
         public void ResetIdleTime()
@@ -172,13 +174,22 @@ namespace Raven.Server.Documents
                 RachisLogIndexNotifications = new RachisLogIndexNotifications(DatabaseShutdown);
                 CatastrophicFailureNotification = new CatastrophicFailureNotification((environmentId, environmentPath, e, stacktrace) =>
                 {
-                    serverStore.DatabasesLandlord.CatastrophicFailureHandler.Execute(name, e, environmentId, environmentPath, stacktrace);
+                    if (_initialized)
+                        serverStore.DatabasesLandlord.CatastrophicFailureHandler.Execute(name, e, environmentId, environmentPath, stacktrace);
+                    else
+                    {
+                        if (_logger.IsOperationsEnabled)
+                            _logger.Operations($"It was about to call CatastrophicFailureHandler while database '{Name}' was not initialized. Stacktrace: {stacktrace}", e);
+                    }
                 });
                 _hasClusterTransaction = new AsyncManualResetEvent(DatabaseShutdown);
                 IdentityPartsSeparator = '/';
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                if (_logger.IsOperationsEnabled)
+                    _logger.Operations($"Exception during database creation. DB: '{Name}'", e);
+
                 Dispose();
                 throw;
             }
@@ -381,9 +392,14 @@ namespace Raven.Server.Documents
                     }
                 }, DatabaseShutdown);
                 _serverStore.LicenseManager.LicenseChanged += LoadTimeSeriesPolicyRunnerConfigurations;
+
+                _initialized = true;
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                if (_logger.IsOperationsEnabled) 
+                    _logger.Operations($"Exception during database initialization. DB: '{Name}'", e);
+
                 Dispose();
                 throw;
             }
@@ -615,6 +631,9 @@ namespace Raven.Server.Documents
 
         private unsafe void DisposeInternal()
         {
+            if (_logger.IsOperationsEnabled)
+                _logger.Operations($"{Name}: Starting dispose");
+
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Starting dispose");
 
             _databaseShutdown.Cancel();
@@ -638,8 +657,8 @@ namespace Raven.Server.Documents
                 ForTestingPurposes?.DisposeLog?.Invoke(Name, $"Generating offline database info failed: {e}");
                 // if we encountered a catastrophic failure we might not be able to retrieve database info
 
-                if (_logger.IsInfoEnabled)
-                    _logger.Info("Failed to generate and store database info", e);
+                if (_logger.IsOperationsEnabled)
+                    _logger.Operations("Failed to generate and store database info", e);
             }
 
             if (ForTestingPurposes == null || ForTestingPurposes.SkipDrainAllRequests == false)
@@ -841,6 +860,9 @@ namespace Raven.Server.Documents
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposing _hasClusterTransaction");
             exceptionAggregator.Execute(_hasClusterTransaction);
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Disposed _hasClusterTransaction");
+
+            if (_logger.IsOperationsEnabled)
+                _logger.Operations($"{Name}: Finished dispose");
 
             ForTestingPurposes?.DisposeLog?.Invoke(Name, "Finished dispose");
 

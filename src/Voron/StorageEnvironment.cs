@@ -170,12 +170,32 @@ namespace Voron
                 // Ensure we are always have the prefetcher available.
                 GC.KeepAlive(GlobalPrefetchingBehavior.GlobalPrefetcher.Value);
             }
-            catch (Exception)
+            catch (Exception e)
             {
+                if (_log?.IsOperationsEnabled == true)
+                    _log.Operations($"{Options.BasePath.FullPath}: Failed to create storage environment", e);
+
                 Dispose();
                 throw;
             }
         }
+
+        ~StorageEnvironment()
+        {
+            if (_log?.IsOperationsEnabled == true)
+                _log.Operations($"{Options.BasePath.FullPath}: Storage environment was not disposed (_envDispose.IsSet: {_envDispose.IsSet})");
+
+            try
+            {
+                Dispose();
+            }
+            catch (Exception e)
+            {
+                if (_log?.IsOperationsEnabled == true)
+                    _log.Operations($"{Options.BasePath.FullPath}: Could not dispose storage environment from destructor", e);
+            }
+        }
+
         private async Task IdleFlushTimer()
         {
             try
@@ -450,6 +470,8 @@ namespace Voron
             if (_envDispose.IsSet)
                 return; // already disposed
 
+            GC.SuppressFinalize(this);
+
             _cancellationTokenSource.Cancel();
             try
             {
@@ -493,6 +515,13 @@ namespace Voron
                 {
                     MoveEnvironmentToDisposeState();
                 }
+            }
+            catch (Exception e)
+            {
+                if (_log.IsOperationsEnabled)
+                    _log.Operations($"{Options.BasePath.FullPath}: Failed on dispose", e);
+
+                throw;
             }
             finally
             {
