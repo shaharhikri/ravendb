@@ -10,6 +10,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Commands.Batches;
 using Raven.Client.Documents.Operations;
+using Raven.Server.Documents.TransactionMerger;
+using Raven.Server.Documents.TransactionMerger.Commands;
 using Raven.Server.Routing;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Smuggler.Documents;
@@ -317,7 +319,7 @@ namespace Raven.Server.Documents.Handlers
             return disposable;
         }
 
-        public class MergedInsertBulkCommand : TransactionOperationsMerger.MergedTransactionCommand
+        public class MergedInsertBulkCommand : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>
         {
             public Logger Logger;
             public DocumentDatabase Database;
@@ -461,7 +463,7 @@ namespace Raven.Server.Documents.Handlers
                 return NumberOfCommands;
             }
 
-            public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+            public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
             {
                 return new MergedInsertBulkCommandDto
                 {
@@ -499,7 +501,7 @@ namespace Raven.Server.Documents.Handlers
         }
     }
 
-    public class MergedInsertBulkCommandDto : TransactionOperationsMerger.IReplayableCommandDto<BulkInsertHandler.MergedInsertBulkCommand>
+    public class MergedInsertBulkCommandDto : IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, BulkInsertHandler.MergedInsertBulkCommand>
     {
         public BatchRequestParser.CommandData[] Commands { get; set; }
 

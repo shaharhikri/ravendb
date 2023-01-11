@@ -15,6 +15,7 @@ using Raven.Client.Documents.Smuggler;
 using Raven.Client.Exceptions.Documents;
 using Raven.Client.Exceptions.Documents.Counters;
 using Raven.Client.Json.Serialization;
+using Raven.Server.Documents.TransactionMerger.Commands;
 using Raven.Server.Routing;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.TrafficWatch;
@@ -27,7 +28,7 @@ namespace Raven.Server.Documents.Handlers
 {
     public class CountersHandler : DatabaseRequestHandler
     {
-        public class ExecuteCounterBatchCommand : TransactionOperationsMerger.MergedTransactionCommand
+        public class ExecuteCounterBatchCommand : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>
         {
             public bool HasWrites;
             public string LastChangeVector;
@@ -241,7 +242,7 @@ namespace Raven.Server.Documents.Handlers
                 countersToRemove.Clear();
             }
 
-            public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+            public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
             {
                 return new ExecuteCounterBatchCommandDto
                 {
@@ -263,7 +264,7 @@ namespace Raven.Server.Documents.Handlers
             }
         }
 
-        public class SmugglerCounterBatchCommand : TransactionOperationsMerger.MergedTransactionCommand, IDisposable
+        public class SmugglerCounterBatchCommand : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>, IDisposable
         {
             private readonly DocumentDatabase _database;
             private readonly List<CounterGroupDetail> _counterGroups;
@@ -582,7 +583,7 @@ namespace Raven.Server.Documents.Handlers
                 _result.Counters.ErroredCount += ErrorCount;
             }
 
-            public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+            public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
             {
                 return new SmugglerCounterBatchCommandDto
                 {
@@ -735,7 +736,7 @@ namespace Raven.Server.Documents.Handlers
         }
     }
 
-    public class ExecuteCounterBatchCommandDto : TransactionOperationsMerger.IReplayableCommandDto<CountersHandler.ExecuteCounterBatchCommand>
+    public class ExecuteCounterBatchCommandDto : IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, CountersHandler.ExecuteCounterBatchCommand>
     {
         public bool ReplyWithAllNodesValues;
         public bool FromEtl;
@@ -749,7 +750,7 @@ namespace Raven.Server.Documents.Handlers
         }
     }
 
-    public class SmugglerCounterBatchCommandDto : TransactionOperationsMerger.IReplayableCommandDto<CountersHandler.SmugglerCounterBatchCommand>
+    public class SmugglerCounterBatchCommandDto : IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, CountersHandler.SmugglerCounterBatchCommand>
     {
         public List<CounterGroupDetail> CounterGroups;
         public Dictionary<string, Dictionary<string, List<(string ChangeVector, long Value)>>> LegacyDictionary;

@@ -7,14 +7,14 @@ using Raven.Client.Documents.Commands.Batches;
 using Raven.Client.Documents.Operations;
 using Raven.Client.Exceptions;
 using Raven.Server.Documents.Handlers;
-using Raven.Server.Documents.TimeSeries;
+using Raven.Server.Documents.TransactionMerger.Commands;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
 
 namespace Raven.Server.Documents.Patch
 {
-    public abstract class PatchDocumentCommandBase : TransactionOperationsMerger.MergedTransactionCommand
+    public abstract class PatchDocumentCommandBase : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>
     {
         private readonly bool _skipPatchIfChangeVectorMismatch;
 
@@ -418,7 +418,7 @@ namespace Raven.Server.Documents.Patch
             return null;
         }
 
-        public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+        public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
         {
             var dto = new BatchPatchDocumentCommandDto();
             FillDto(dto);
@@ -474,7 +474,7 @@ namespace Raven.Server.Documents.Patch
             return HandleReply(_id, PatchResult, reply, modifiedCollections);
         }
 
-        public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+        public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
         {
             var dto = new PatchDocumentCommandDto();
             FillDto(dto);
@@ -531,8 +531,8 @@ namespace Raven.Server.Documents.Patch
         }
     }
 
-    public abstract class PatchDocumentCommandDtoBase<TCommand> : PatchDocumentCommandDtoBase, TransactionOperationsMerger.IReplayableCommandDto<TCommand>
-        where TCommand : TransactionOperationsMerger.MergedTransactionCommand
+    public abstract class PatchDocumentCommandDtoBase<TCommand> : PatchDocumentCommandDtoBase, IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, TCommand>
+        where TCommand : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>
     {
         public abstract TCommand ToCommand(DocumentsOperationContext context, DocumentDatabase database);
     }

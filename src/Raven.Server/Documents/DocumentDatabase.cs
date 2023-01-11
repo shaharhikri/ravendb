@@ -30,6 +30,7 @@ using Raven.Server.Documents.Replication;
 using Raven.Server.Documents.Subscriptions;
 using Raven.Server.Documents.TcpHandlers;
 using Raven.Server.Documents.TimeSeries;
+using Raven.Server.Documents.TransactionMerger;
 using Raven.Server.Json;
 using Raven.Server.NotificationCenter.Notifications;
 using Raven.Server.NotificationCenter.Notifications.Details;
@@ -162,7 +163,7 @@ namespace Raven.Server.Documents
                 SubscriptionStorage = new SubscriptionStorage(this, serverStore);
                 Metrics = new MetricCounters();
                 MetricCacher = new DatabaseMetricCacher(this);
-                TxMerger = new TransactionOperationsMerger(this, DatabaseShutdown);
+                TxMerger = new DocumentsTransactionOperationsMerger(this);
                 ConfigurationStorage = new ConfigurationStorage(this);
                 NotificationCenter = new NotificationCenter.NotificationCenter(ConfigurationStorage.NotificationsStorage, Name, DatabaseShutdown, configuration);
                 HugeDocuments = new HugeDocuments(NotificationCenter, ConfigurationStorage.NotificationsStorage, Name, configuration.PerformanceHints.HugeDocumentsCollectionSize,
@@ -196,7 +197,8 @@ namespace Raven.Server.Documents
         public readonly SystemTime Time = new SystemTime();
 
         public ScriptRunnerCache Scripts;
-        public readonly TransactionOperationsMerger TxMerger;
+
+        public readonly DocumentsTransactionOperationsMerger TxMerger;
 
         public SubscriptionStorage SubscriptionStorage { get; }
 
@@ -296,6 +298,7 @@ namespace Raven.Server.Documents
                 _addToInitLog("Initializing DocumentStorage");
                 DocumentsStorage.Initialize((options & InitializeOptions.GenerateNewDatabaseId) == InitializeOptions.GenerateNewDatabaseId);
                 _addToInitLog("Starting Transaction Merger");
+                TxMerger.Initialize(DocumentsStorage.ContextPool, NotificationCenter);
                 TxMerger.Start();
                 _addToInitLog("Initializing ConfigurationStorage");
                 ConfigurationStorage.Initialize();

@@ -39,6 +39,8 @@ using Sparrow.Server;
 using Sparrow.Server.Utils;
 using Sparrow.Threading;
 using Sparrow.Utils;
+using Raven.Server.Documents.TransactionMerger;
+using Raven.Server.Documents.TransactionMerger.Commands;
 using Voron;
 
 namespace Raven.Server.Documents.Replication
@@ -876,7 +878,7 @@ namespace Raven.Server.Documents.Replication
             UpdateDestinationChangeVectorHeartbeat(replicationBatchReply);
         }
 
-        internal class UpdateSiblingCurrentEtag : TransactionOperationsMerger.MergedTransactionCommand
+        internal class UpdateSiblingCurrentEtag : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>
         {
             private readonly ReplicationMessageReply _replicationBatchReply;
             private readonly AsyncManualResetEvent _trigger;
@@ -965,7 +967,7 @@ namespace Raven.Server.Documents.Replication
                 return result.IsValid ? 1 : 0;
             }
 
-            public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+            public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
             {
                 return new UpdateSiblingCurrentEtagDto
                 {
@@ -1350,7 +1352,7 @@ namespace Raven.Server.Documents.Replication
         IncomingReplicationPerformanceStats[] GetReplicationPerformance();
     }
 
-    internal class UpdateSiblingCurrentEtagDto : TransactionOperationsMerger.IReplayableCommandDto<OutgoingReplicationHandler.UpdateSiblingCurrentEtag>
+    internal class UpdateSiblingCurrentEtagDto : IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, OutgoingReplicationHandler.UpdateSiblingCurrentEtag>
     {
         public ReplicationMessageReply ReplicationBatchReply;
 

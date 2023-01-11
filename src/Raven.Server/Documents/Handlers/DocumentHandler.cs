@@ -11,7 +11,6 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Net;
-using System.Runtime.ExceptionServices;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Changes;
 using Raven.Client.Documents.Commands;
@@ -22,11 +21,11 @@ using Raven.Client.Documents.Operations.CompareExchange;
 using Raven.Client.Documents.Operations.Counters;
 using Raven.Client.Documents.Operations.TimeSeries;
 using Raven.Client.Documents.Session.Loaders;
-using Raven.Client.Exceptions;
 using Raven.Client.Http;
 using Raven.Server.Documents.Includes;
 using Raven.Server.Documents.Patch;
 using Raven.Server.Documents.Queries.Revisions;
+using Raven.Server.Documents.TransactionMerger.Commands;
 using Raven.Server.Json;
 using Raven.Server.NotificationCenter.Notifications.Details;
 using Raven.Server.Routing;
@@ -40,7 +39,7 @@ using Sparrow.Server;
 using Sparrow.Utils;
 using Voron;
 using Constants = Raven.Client.Constants;
-using DeleteDocumentCommand = Raven.Server.Documents.TransactionCommands.DeleteDocumentCommand;
+using DeleteDocumentCommand = Raven.Server.Documents.TransactionMerger.Commands.DeleteDocumentCommand;
 using PatchRequest = Raven.Server.Documents.Patch.PatchRequest;
 
 namespace Raven.Server.Documents.Handlers
@@ -723,7 +722,7 @@ namespace Raven.Server.Documents.Handlers
         }
     }
 
-    public class MergedPutCommand : TransactionOperationsMerger.MergedTransactionCommand, IDisposable
+    public class MergedPutCommand : MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>, IDisposable
     {
         private string _id;
         private readonly LazyStringValue _expectedChangeVector;
@@ -806,9 +805,9 @@ namespace Raven.Server.Documents.Handlers
             _document?.Dispose();
         }
 
-        public override TransactionOperationsMerger.IReplayableCommandDto<TransactionOperationsMerger.MergedTransactionCommand> ToDto<TTransaction>(TransactionOperationContext<TTransaction> context)
+        public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)
         {
-            return new MergedPutCommandDto()
+            return new MergedPutCommandDto
             {
                 Id = _id,
                 ExpectedChangeVector = _expectedChangeVector,
@@ -816,7 +815,7 @@ namespace Raven.Server.Documents.Handlers
             };
         }
 
-        public class MergedPutCommandDto : TransactionOperationsMerger.IReplayableCommandDto<MergedPutCommand>
+        public class MergedPutCommandDto : IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedPutCommand>
         {
             public string Id { get; set; }
             public LazyStringValue ExpectedChangeVector { get; set; }
