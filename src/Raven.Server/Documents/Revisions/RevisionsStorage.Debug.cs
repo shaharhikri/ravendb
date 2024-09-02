@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
 using Voron.Data.Tables;
+using static Raven.Server.Documents.RevisionsBinCleaner;
 
 namespace Raven.Server.Documents.Revisions
 {
@@ -32,6 +33,10 @@ namespace Raven.Server.Documents.Revisions
                     var lastRevision = TableValueToRevision(context, ref holder.Reader, DocumentFields.ChangeVector | DocumentFields.LowerId);
                     _parent.DeleteRevisionFromTable(context, table, new Dictionary<string, Table>(), lastRevision, collectionName, context.GetChangeVector(lastRevision.ChangeVector), _parent._database.Time.GetUtcNow().Ticks, lastRevision.Flags);
                     IncrementCountOfRevisions(context, lowerIdPrefix, -1);
+
+                    var revisionsBinCleanerState = DocumentsStorage.ReadLastRevisionsBinCleanerState(context.Transaction.InnerTransaction);
+                    if (_parent.UpdateRevisionsBinCleanerStateIfNeeded(context, revisionsBinCleanerState, lastRevision))
+                        _parent._documentsStorage.SetLastRevisionsBinCleanerState(context, revisionsBinCleanerState);
                 }
             }
         }

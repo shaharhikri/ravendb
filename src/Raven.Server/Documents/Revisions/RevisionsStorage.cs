@@ -30,6 +30,7 @@ using Voron.Data.Tables;
 using Voron.Exceptions;
 using Voron.Impl;
 using static Raven.Server.Documents.DocumentsStorage;
+using static Raven.Server.Documents.RevisionsBinCleaner;
 using static Raven.Server.Documents.Schemas.Collections;
 using static Raven.Server.Documents.Schemas.Revisions;
 using static Voron.Data.Tables.Table;
@@ -129,16 +130,15 @@ namespace Raven.Server.Documents.Revisions
                 if (revisions == null || (revisions.Default == null && revisions.Collections.Count == 0))
                 {
                     Configuration = null;
-                    return;
+                }
+                else if (revisions.Equals(Configuration) == false)
+                {
+                    Configuration = revisions;
+
+                    if (_logger.IsInfoEnabled)
+                        _logger.Info("Revisions configuration changed");
                 }
 
-                if (revisions.Equals(Configuration))
-                    return;
-
-                Configuration = revisions;
-
-                if (_logger.IsInfoEnabled)
-                    _logger.Info("Revisions configuration changed");
             }
             catch (Exception e)
             {
@@ -794,6 +794,9 @@ namespace Raven.Server.Documents.Revisions
             var first = true;
             Document lastRevisionToDelete = null;
 
+            RevisionsBinCleanerState revisionsBinCleanerState = null;
+            bool revisionsBinCleanerStateChanged = false;
+
             foreach (var revision in revisionsToRemove)
             {
                 if (first)
@@ -801,13 +804,16 @@ namespace Raven.Server.Documents.Revisions
                     lastRevisionToDelete = revision;
                     first = false;
                     result.Skip++;
+                    revisionsBinCleanerState = ReadLastRevisionsBinCleanerState(context.Transaction.InnerTransaction);
                     continue;
                 }
 
                 maxEtagDeleted = Math.Max(maxEtagDeleted, lastRevisionToDelete.Etag);
                 DeleteRevisionFromTable(context, table, writeTables, lastRevisionToDelete, collectionName, changeVector, lastModifiedTicks, tombstoneFlags);
-
                 deleted++;
+
+                revisionsBinCleanerStateChanged |= UpdateRevisionsBinCleanerStateIfNeeded(context, revisionsBinCleanerState, lastRevisionToDelete);
+
                 lastRevisionToDelete = revision;
             }
 
@@ -825,11 +831,37 @@ namespace Raven.Server.Documents.Revisions
                     maxEtagDeleted = Math.Max(maxEtagDeleted, lastRevisionToDelete.Etag);
                     DeleteRevisionFromTable(context, table, writeTables, lastRevisionToDelete, collectionName, changeVector, lastModifiedTicks, tombstoneFlags);
                     deleted++;
+
+                    revisionsBinCleanerStateChanged |= UpdateRevisionsBinCleanerStateIfNeeded(context, revisionsBinCleanerState, lastRevisionToDelete);
                 }
             }
 
+            if(revisionsBinCleanerStateChanged)
+                _documentsStorage.SetLastRevisionsBinCleanerState(context, revisionsBinCleanerState);
+
             _database.DocumentsStorage.EnsureLastEtagIsPersisted(context, maxEtagDeleted);
             return deleted;
+        }
+
+        private bool UpdateRevisionsBinCleanerStateIfNeeded(DocumentsOperationContext context, RevisionsBinCleanerState state, Document revision)
+        {
+            if (state == null)
+                return false;
+
+            if (revision.Flags.Contain(DocumentFlags.DeleteRevision) == false)
+                return false;
+
+            if (state.Skip > 0)
+            {
+                var etag = ChangeVectorUtils.GetEtagById(revision.ChangeVector, context.DocumentDatabase.DbBase64Id);
+                if (state.Etag >= etag)
+                {
+                    state.Skip--;
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private bool RevisionIsLast(DocumentsOperationContext context, Table table, Slice lowerIdPrefix, long etag)
@@ -1177,7 +1209,7 @@ namespace Raven.Server.Documents.Revisions
 
                     var tvr = read.Result.Reader;
                     var revision = TableValueToRevision(context, ref tvr, DocumentFields.ChangeVector | DocumentFields.LowerId);
-
+                    
                     if (shouldSkip != null && shouldSkip.Invoke(revision))
                     {
                         context.Transaction.ForgetAbout(revision);
@@ -2452,6 +2484,50 @@ namespace Raven.Server.Documents.Revisions
                 }
 
                 yield return TableValueToRevision(context, ref tvr.Result.Reader);
+            }
+        }
+
+        public IEnumerable<Document> GetRevisionsBinEntries(DocumentsOperationContext context, DateTime before, DocumentFields fields, RevisionsBinCleanerState state)
+        {
+            var table = new Table(RevisionsSchema, context.Transaction.InnerTransaction);
+
+            var ended = false;
+            while (ended == false)
+            {
+                ended = true;
+                foreach (var seekResult in table.SeekForwardFrom(RevisionsSchema.Indexes[DeleteRevisionEtagSlice], Slices.BeforeAllKeys, state.Skip))
+                {
+                    var tvr = seekResult.Result;
+                    var storageId = tvr.Reader.Id;
+                    var etag = TableValueToEtag((int)RevisionsTable.DeletedEtag, ref tvr.Reader);
+                    if (etag == NotDeletedRevisionMarker)
+                    {
+                        state.Skip++;
+                        context.Transaction.InnerTransaction.ForgetAbout(storageId);
+                        continue;
+                    }
+
+                    using (TableValueToSlice(context, (int)RevisionsTable.LowerId, ref tvr.Reader, out Slice lowerId))
+                    {
+                        if (IsRevisionsBinEntry(context, table, lowerId, etag) == false) // if its not last - continue
+                        {
+                            state.Skip++;
+                            context.Transaction.InnerTransaction.ForgetAbout(storageId);
+                            continue;
+                        }
+                    }
+
+                    var deleteRevision = TableValueToRevision(context, ref tvr.Reader, fields);
+                    if (deleteRevision.LastModified >= before)
+                    { 
+                       context.Transaction.ForgetAbout(deleteRevision);
+                       yield break;
+                    }
+
+                    yield return deleteRevision;
+                    context.Transaction.ForgetAbout(deleteRevision);
+                    ended = false;
+                }
             }
         }
 

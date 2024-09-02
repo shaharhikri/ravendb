@@ -187,7 +187,8 @@ namespace Raven.Server.ServerWide
             [nameof(UpdateResponsibleNodeForTasksCommand)] = UpdateResponsibleNodeForTasksCommand.CommandVersion,
             [nameof(AddPrefixedShardingSettingCommand)] = 61_000,
             [nameof(DeletePrefixedShardingSettingCommand)] = 61_000,
-            [nameof(UpdatePrefixedShardingSettingCommand)] = 61_000
+            [nameof(UpdatePrefixedShardingSettingCommand)] = 61_000,
+            [nameof(RevisionsBinConfigurationCommand)] = 61_000
 
         };
 

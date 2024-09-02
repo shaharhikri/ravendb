@@ -956,6 +956,10 @@ namespace Raven.Server.Rachis
             if (leader == null || CurrentState != RachisState.Leader)
                 throw new NotLeadingException("Not a valid leader, cannot accept commands. " + _lastStateChangeReason);
 
+            if (cmd is RevisionsBinConfigurationCommand)
+            {
+            }
+
             Validator.AssertPutCommandToLeader(cmd);
             return leader.PutAsync(cmd, cmd.Timeout ?? OperationTimeout);
         }

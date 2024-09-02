@@ -38,6 +38,7 @@ using Voron.Data.Fixed;
 using Voron.Data.Tables;
 using Voron.Exceptions;
 using Voron.Impl;
+using static Raven.Server.Documents.RevisionsBinCleaner;
 using static Raven.Server.Documents.Schemas.Collections;
 using static Raven.Server.Documents.Schemas.Documents;
 using static Raven.Server.Documents.Schemas.Tombstones;
@@ -80,6 +81,7 @@ namespace Raven.Server.Documents
         private static readonly Slice EtagsSlice;
         private static readonly Slice LastEtagSlice;
         private static readonly Slice LastCompletedClusterTransactionIndexSlice;
+        private static readonly Slice LastRevisionsBinCleanerState;
         private static readonly Slice GlobalTreeSlice;
         private static readonly Slice GlobalChangeVectorSlice;
         private static readonly Slice GlobalFullChangeVectorSlice;
@@ -105,6 +107,7 @@ namespace Raven.Server.Documents
                 Slice.From(ctx, "LastEtag", ByteStringType.Immutable, out LastEtagSlice);
                 Slice.From(ctx, "LastReplicatedEtags", ByteStringType.Immutable, out LastReplicatedEtagsSlice);
                 Slice.From(ctx, "LastCompletedClusterTransactionIndex", ByteStringType.Immutable, out LastCompletedClusterTransactionIndexSlice);
+                Slice.From(ctx, "LastRevisionsBinCleanerState", ByteStringType.Immutable, out LastRevisionsBinCleanerState);
                 Slice.From(ctx, "GlobalTree", ByteStringType.Immutable, out GlobalTreeSlice);
                 Slice.From(ctx, "GlobalChangeVector", ByteStringType.Immutable, out GlobalChangeVectorSlice);
                 Slice.From(ctx, "GlobalFullChangeVector", ByteStringType.Immutable, out GlobalFullChangeVectorSlice);
@@ -647,6 +650,56 @@ namespace Raven.Server.Documents
             var tree = context.Transaction.InnerTransaction.CreateTree(GlobalTreeSlice);
             using (Slice.External(context.Allocator, (byte*)&index, sizeof(long), out Slice indexSlice))
                 tree.Add(LastCompletedClusterTransactionIndexSlice, indexSlice);
+        }
+
+        public static RevisionsBinCleanerState ReadLastRevisionsBinCleanerState(Transaction tx)
+        {
+            const int size = sizeof(long) * 2;
+
+            if (tx == null)
+                throw new InvalidOperationException("No active transaction found in the context, and at least read transaction is needed");
+            var tree = tx.ReadTree(GlobalTreeSlice);
+            if (tree == null)
+            {
+                return null;
+            }
+            var readResult = tree.Read(LastRevisionsBinCleanerState);
+            if (readResult == null)
+            {
+                return null;
+            }
+
+            var state = new RevisionsBinCleanerState();
+
+            var buffer = new byte[size];
+            fixed (byte* ptr = buffer)
+            {
+                var result = readResult.Reader.Read(ptr, size);
+                Debug.Assert(result == size);
+                state.Skip = *(long*)ptr;
+                state.Etag = *(long*)(ptr + sizeof(long));
+            }
+
+            return state;
+        }
+
+        public void SetLastRevisionsBinCleanerState(DocumentsOperationContext context, RevisionsBinCleanerState state)
+        {
+            const int size = sizeof(long) * 2;
+
+            var buffer = new byte[size];
+
+            byte[] skipBytes = BitConverter.GetBytes(state.Skip);
+            Array.Copy(skipBytes, 0, buffer, 0, skipBytes.Length);
+            byte[] etagBytes = BitConverter.GetBytes(state.Etag);
+            Array.Copy(etagBytes, 0, buffer, skipBytes.Length, etagBytes.Length);
+
+            fixed (byte* ptr = buffer)
+            {
+                var tree = context.Transaction.InnerTransaction.CreateTree(GlobalTreeSlice);
+                using (Slice.External(context.Allocator, ptr, size, out Slice indexSlice))
+                    tree.Add(LastRevisionsBinCleanerState, indexSlice);
+            }
         }
 
         public IEnumerable<Document> GetDocumentsStartingWith(DocumentsOperationContext context, string idPrefix, string startAfterId,
