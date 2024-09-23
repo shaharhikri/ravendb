@@ -11,6 +11,7 @@ namespace Raven.Client.Documents.Operations.Revisions
 {
     public sealed class RevisionsBinConfiguration : IFillFromBlittableJson, IDynamicJson
     {
+        public bool Disabled { get; set; }
         public TimeSpan? MinimumEntriesAgeToKeep { get; set; }
         public TimeSpan RefreshFrequency { get; set; } = TimeSpan.FromMinutes(5);
         public TimeSpan CleanupInterval { get; set; } = TimeSpan.FromSeconds(15);
@@ -19,7 +20,8 @@ namespace Raven.Client.Documents.Operations.Revisions
 
         private bool Equals(RevisionsBinConfiguration other)
         {
-            return MinimumEntriesAgeToKeep == other.MinimumEntriesAgeToKeep &&
+            return Disabled == other.Disabled &&
+                   MinimumEntriesAgeToKeep == other.MinimumEntriesAgeToKeep &&
                    RefreshFrequency == other.RefreshFrequency &&
                    CleanupInterval == other.CleanupInterval &&
                    MaxItemsToProcess == other.MaxItemsToProcess &&
@@ -41,7 +43,8 @@ namespace Raven.Client.Documents.Operations.Revisions
         {
             unchecked
             {
-                var hashCode = MinimumEntriesAgeToKeep?.GetHashCode() ?? 0;
+                var hashCode = Disabled.GetHashCode();
+                hashCode = (hashCode * 397) ^ (MinimumEntriesAgeToKeep?.GetHashCode() ?? 0);
                 hashCode = (hashCode * 397) ^ RefreshFrequency.GetHashCode();
                 hashCode = (hashCode * 397) ^ CleanupInterval.GetHashCode();
                 hashCode = (hashCode * 397) ^ MaxItemsToProcess.GetHashCode();
@@ -53,6 +56,7 @@ namespace Raven.Client.Documents.Operations.Revisions
         public void FillFromBlittableJson(BlittableJsonReaderObject json)
         {
             var configuration = DocumentConventions.Default.Serialization.DefaultConverter.FromBlittable<RevisionsBinConfiguration>(json, "RevisionsConfiguration");
+            Disabled = configuration.Disabled;
             MinimumEntriesAgeToKeep = configuration.MinimumEntriesAgeToKeep;
             RefreshFrequency = configuration.RefreshFrequency;
             CleanupInterval = configuration.CleanupInterval;
@@ -64,6 +68,7 @@ namespace Raven.Client.Documents.Operations.Revisions
         {
             return new DynamicJsonValue
             {
+                [nameof(Disabled)] = Disabled,
                 [nameof(MinimumEntriesAgeToKeep)] = MinimumEntriesAgeToKeep,
                 [nameof(RefreshFrequency)] = RefreshFrequency,
                 [nameof(CleanupInterval)] = CleanupInterval,

@@ -39,7 +39,7 @@ namespace Raven.Server.Documents
             try
             {
                 var config = record.RevisionsBin;
-                if (config == null)
+                if (config == null || config.Disabled)
                 {
                     oldCleaner?.Dispose();
                     return null;

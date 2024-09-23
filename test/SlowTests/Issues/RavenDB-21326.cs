@@ -2,7 +2,6 @@
 using System.Threading.Tasks;
 using FastTests;
 using FastTests.Utils;
-using Raven.Client;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.Revisions;
 using Raven.Server.Documents;
@@ -56,7 +55,7 @@ namespace SlowTests.Issues
         {
             using var store = GetDocumentStore(options);
 
-            var configuration = new RevisionsConfiguration
+            var revisionsConfig = new RevisionsConfiguration
             {
                 Default = new RevisionsCollectionConfiguration
                 {
@@ -64,8 +63,7 @@ namespace SlowTests.Issues
                     MinimumRevisionsToKeep = 100
                 }
             };
-
-            await RevisionsHelper.SetupRevisionsAsync(store, store.Database, configuration);
+            await RevisionsHelper.SetupRevisionsAsync(store, store.Database, revisionsConfig);
 
             var user1 = new User { Id = "Users/1-A", Name = "Shahar" };
             var user2 = new User { Id = "Users/2-B", Name = "Shahar" };
@@ -93,7 +91,12 @@ namespace SlowTests.Issues
                 Assert.Equal(13, await session.Advanced.Revisions.GetCountForAsync(user2.Id));
             }
 
-            await ConfigRevisionsBinCleaner(store, TimeSpan.Zero);
+            var config = new RevisionsBinConfiguration
+            {
+                MinimumEntriesAgeToKeep = TimeSpan.Zero,
+                RefreshFrequency = TimeSpan.FromMilliseconds(200)
+            };
+            await ConfigRevisionsBinCleaner(store, config);
 
             await AssertWaitForValueAsync(async () =>
             {
@@ -103,37 +106,33 @@ namespace SlowTests.Issues
                 }
             }, 0);
 
-            // await EndCleaning(store);
-            //
-            // using (var session = store.OpenAsyncSession())
-            // {
-            //     session.Delete(user2.Id);
-            //     await session.SaveChangesAsync(); // delete user2
-            // }
-            //
-            // await Task.Delay(TimeSpan.FromSeconds(5));
-            //
-            // WaitForUserToContinueTheTest(store, false);
+            // End Cleanup
+            config.Disabled = true;
+            await ConfigRevisionsBinCleaner(store, config);
 
+            using (var session = store.OpenAsyncSession())
+            {
+                session.Delete(user2.Id);
+                await session.SaveChangesAsync(); // delete user2
+            }
+
+            using (var session = store.OpenAsyncSession())
+            {
+               Assert.Equal(14, await session.Advanced.Revisions.GetCountForAsync(user2.Id));
+            }
 
         }
 
-        private async Task ConfigRevisionsBinCleaner(DocumentStore store, TimeSpan age)
+        private async Task ConfigRevisionsBinCleaner(DocumentStore store, RevisionsBinConfiguration config)
         {
-            var config = new RevisionsBinConfiguration
-            {
-                MinimumEntriesAgeToKeep = age,
-                RefreshFrequency = TimeSpan.FromMilliseconds(200)
-            };
-
             var result = await store.Maintenance.SendAsync(new ConfigureRevisionsBinCleanerOperation(config));
             await store.Maintenance.SendAsync(new WaitForIndexNotificationOperation(result.RaftCommandIndex.Value));
-        }
 
-        private async Task EndCleaning(DocumentStore store)
-        {
-            var result = await store.Maintenance.SendAsync(new ConfigureRevisionsBinCleanerOperation(configuration: null));
-            await store.Maintenance.SendAsync(new WaitForIndexNotificationOperation(result.RaftCommandIndex.Value));
+            await AssertWaitForTrueAsync(async () =>
+            {
+                var record = await GetDatabaseRecordAsync(store);
+                return config.Equals(record.RevisionsBin);
+            });
         }
 
         private class User

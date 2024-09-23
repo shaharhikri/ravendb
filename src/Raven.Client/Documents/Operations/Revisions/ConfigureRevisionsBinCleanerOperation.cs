@@ -14,7 +14,7 @@ using Sparrow.Json.Parsing;
 
 namespace Raven.Client.Documents.Operations.Revisions
 {
-    internal class ConfigureRevisionsBinCleanerOperation : IMaintenanceOperation<ConfigureRevisionsBinCleanerOperationResult>
+    public sealed class ConfigureRevisionsBinCleanerOperation : IMaintenanceOperation<ConfigureRevisionsBinCleanerOperationResult>
     {
         private readonly RevisionsBinConfiguration _configuration;
 
