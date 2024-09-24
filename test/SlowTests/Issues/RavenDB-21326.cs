@@ -1,11 +1,15 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using FastTests;
+using FastTests.Issues;
 using FastTests.Utils;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Operations.Revisions;
 using Raven.Server.Documents;
 using Raven.Server.Documents.Commands;
+using Raven.Server.ServerWide;
 using Raven.Server.ServerWide.Context;
 using Tests.Infrastructure;
 using Xunit;
@@ -18,6 +22,7 @@ namespace SlowTests.Issues
         public RavenDB_21326(ITestOutputHelper output) : base(output)
         {
         }
+
 
         [RavenFact(RavenTestCategory.Revisions)]
         public async Task TestReadAndWriteLastRevisionsBinCleanerState()
@@ -36,6 +41,7 @@ namespace SlowTests.Issues
                     });
                     tx.Commit();
                 }
+
 
                 using (db.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
                 using (context.OpenReadTransaction())
@@ -122,6 +128,242 @@ namespace SlowTests.Issues
             }
 
         }
+
+
+        [RavenFact(RavenTestCategory.Revisions)]
+        public async Task RevisionsBinCleanerMaxReadsTest()
+        {
+            using var store = GetDocumentStore();
+
+            var revisionsConfig = new RevisionsConfiguration
+            {
+                Default = new RevisionsCollectionConfiguration
+                {
+                    Disabled = false,
+                    MinimumRevisionsToKeep = 100
+                }
+            };
+            await RevisionsHelper.SetupRevisionsAsync(store, store.Database, revisionsConfig);
+
+            var users = new List<User>();
+            for (int i = 1; i <= 10; i++)
+                users.Add(new User { Id = $"Users/{i}", Name = "Shahar" });
+
+            using (var session = store.OpenAsyncSession())
+            {
+                session.Advanced.MaxNumberOfRequestsPerSession = Int32.MaxValue;
+
+                foreach (var user in users)
+                {
+                    await session.StoreAsync(user);
+                    await session.SaveChangesAsync();
+                    for (int i = 1; i <= 10; i++)
+                    {
+                        (await session.LoadAsync<User>(user.Id)).Name = $"Shahar{i}";
+                        await session.SaveChangesAsync();
+                    }
+                    session.Delete(user.Id);
+                    await session.SaveChangesAsync();
+
+                    Assert.Equal(12, await session.Advanced.Revisions.GetCountForAsync(user.Id));
+                }
+            }
+            
+            var config = new RevisionsBinConfiguration
+            {
+                NumberOfDeletesInBatch = 5 * 12, // Max deletes of revisions in batch
+                MaxItemsToProcess = 3, // max deleted document we pass on in batch
+                MinimumEntriesAgeToKeep = TimeSpan.Zero,
+                RefreshFrequency = TimeSpan.FromMilliseconds(200),
+                CleanupInterval = TimeSpan.MaxValue
+            };
+
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+            var cleaner = new RevisionsBinCleaner(db, config);
+
+            var deletes = await cleaner.ExecuteCleanup();
+            Assert.Equal(10, deletes);
+            deletes = await cleaner.ExecuteCleanup();
+            Assert.Equal(0, deletes);
+        }
+
+
+        [RavenFact(RavenTestCategory.Revisions)]
+        public async Task RevisionsBinCleanerAgeTest()
+        {
+            var baseTime = new DateTime(year: 2024, month: 1, day: 1);
+
+            using var store = GetDocumentStore();
+
+            var revisionsConfig = new RevisionsConfiguration
+            {
+                Default = new RevisionsCollectionConfiguration
+                {
+                    Disabled = false,
+                    MinimumRevisionsToKeep = 100
+                }
+            };
+            await RevisionsHelper.SetupRevisionsAsync(store, store.Database, revisionsConfig);
+
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+            db.Time.UtcDateTime = () => baseTime - TimeSpan.FromDays(30);
+
+            var users = new List<User>();
+            for (int i = 0; i < 10; i++)
+                users.Add(new User { Id = $"Users/{i}", Name = "Shahar" });
+
+            using (var session = store.OpenAsyncSession())
+            {
+                session.Advanced.MaxNumberOfRequestsPerSession = Int32.MaxValue;
+
+                for (int u = 0; u < 10; u++)
+                {
+                    var user = users[u];
+
+                    await session.StoreAsync(user);
+                    await session.SaveChangesAsync();
+                    for (int i = 1; i <= 10; i++)
+                    {
+                        (await session.LoadAsync<User>(user.Id)).Name = $"Shahar{i}";
+                        await session.SaveChangesAsync();
+                    }
+                    session.Delete(user.Id);
+                    await session.SaveChangesAsync();
+
+                    Assert.Equal(12, await session.Advanced.Revisions.GetCountForAsync(user.Id));
+
+                    if (u == 4)
+                        db.Time.UtcDateTime = () => baseTime;
+                }
+            }
+
+            // users 0-4 30 days ago, users 5-9 is now
+
+            var config = new RevisionsBinConfiguration
+            {
+                MinimumEntriesAgeToKeep = TimeSpan.FromDays(15),
+                RefreshFrequency = TimeSpan.FromMilliseconds(200),
+                CleanupInterval = TimeSpan.MaxValue
+            };
+
+            var cleaner = new RevisionsBinCleaner(db, config);
+
+            var deletes = await cleaner.ExecuteCleanup();
+            Assert.Equal(5, deletes);
+            deletes = await cleaner.ExecuteCleanup();
+            Assert.Equal(0, deletes);
+
+            using (var session = store.OpenAsyncSession())
+            {
+                for (int u = 0; u < 5; u++)
+                {
+                    Assert.Equal(0, await session.Advanced.Revisions.GetCountForAsync(users[u].Id));
+                }
+            }
+
+            using (var session = store.OpenAsyncSession())
+            {
+                for (int u = 5; u < 10; u++)
+                {
+                    Assert.Equal(12, await session.Advanced.Revisions.GetCountForAsync(users[u].Id));
+                }
+            }
+        }
+
+        [RavenFact(RavenTestCategory.Revisions)]
+        public async Task RevisionsBinCleanerStateTest()
+        {
+            var baseTime = new DateTime(year: 2024, month: 1, day: 1);
+
+            using var store = GetDocumentStore();
+            var db = await Databases.GetDocumentDatabaseInstanceFor(store);
+            db.Time.UtcDateTime = () => baseTime - TimeSpan.FromDays(30);
+
+            var revisionsConfig = new RevisionsConfiguration
+            {
+                Default = new RevisionsCollectionConfiguration
+                {
+                    Disabled = false,
+                    MinimumRevisionsToKeep = 100
+                }
+            };
+            await RevisionsHelper.SetupRevisionsAsync(store, store.Database, revisionsConfig);
+
+            var users = new List<User>();
+            for (int i = 0; i < 10; i++)
+                users.Add(new User { Id = $"Users/{i}", Name = "Shahar" });
+
+            using (var session = store.OpenAsyncSession())
+            {
+                session.Advanced.MaxNumberOfRequestsPerSession = Int32.MaxValue;
+
+                for (int u = 0; u < 10; u++)
+                {
+                    // if (u == 5)
+                    //     db.Time.UtcDateTime = () => baseTime;
+
+                    var user = users[u];
+
+                    await session.StoreAsync(user);
+                    await session.SaveChangesAsync();
+                    for (int i = 1; i <= 10; i++)
+                    {
+                        (await session.LoadAsync<User>(user.Id)).Name = $"Shahar{i}";
+                        await session.SaveChangesAsync();
+                    }
+                    session.Delete(user.Id);
+                    await session.SaveChangesAsync();
+
+                    Assert.Equal(12, await session.Advanced.Revisions.GetCountForAsync(user.Id));
+
+                    if (u == 1 || u == 3 || u==7)
+                        await session.StoreAsync(user);
+                }
+            }
+
+            db.Time.UtcDateTime = () => baseTime;
+
+            // 0* 1- 2* 3- 4*
+
+            var config = new RevisionsBinConfiguration
+            {
+                MaxItemsToProcess = 5,
+                MinimumEntriesAgeToKeep = TimeSpan.FromDays(15),
+                CleanupInterval = TimeSpan.MaxValue
+            };
+            var cleaner = new RevisionsBinCleaner(db, config);
+
+            var deletes = await cleaner.ExecuteCleanup();
+            Assert.Equal(3, deletes);
+
+            using (db.DocumentsStorage.ContextPool.AllocateOperationContext(out DocumentsOperationContext context))
+            using (context.OpenReadTransaction())
+            {
+                var state = DocumentsStorage.ReadLastRevisionsBinCleanerState(context.Transaction.InnerTransaction);
+
+                // Assert.Equal(1234567890123456789, state.Etag);
+                Assert.Equal(2, state.Skip);
+            }
+
+
+            // using (var session = store.OpenAsyncSession())
+            // {
+            //     for (int u = 0; u < 5; u++)
+            //     {
+            //         Assert.Equal(0, await session.Advanced.Revisions.GetCountForAsync(users[u].Id));
+            //     }
+            // }
+            //
+            // using (var session = store.OpenAsyncSession())
+            // {
+            //     for (int u = 5; u < 10; u++)
+            //     {
+            //         Assert.Equal(12, await session.Advanced.Revisions.GetCountForAsync(users[u].Id));
+            //     }
+            // }
+        }
+
+        //RevisionsBinCleanerStateTest
 
         private async Task ConfigRevisionsBinCleaner(DocumentStore store, RevisionsBinConfiguration config)
         {

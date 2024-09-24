@@ -76,7 +76,11 @@ namespace Raven.Server.Documents
 
             config ??= _configuration;
 
-            if (config == null || config.MinimumEntriesAgeToKeep == null || config.MaxItemsToProcess <= 0 || CancellationToken.IsCancellationRequested)
+            if (config == null || 
+                config.MinimumEntriesAgeToKeep == null || 
+                config.MinimumEntriesAgeToKeep.Value == TimeSpan.MaxValue ||
+                config.MaxItemsToProcess <= 0 || 
+                CancellationToken.IsCancellationRequested)
                 return numberOfDeletedEntries;
 
             try
@@ -99,11 +103,8 @@ namespace Raven.Server.Documents
 
                     numberOfDeletedEntries += res.DeletedEntries;
                     
-                     if (res.DeletedRevisions < batchSize)
+                     if (res.HasMore == false || sw.Elapsed > config.CleanupInterval)
                         break;
-
-                     if (sw.Elapsed > config.CleanupInterval)
-                         break;
                 }
             }
             catch (Exception e)

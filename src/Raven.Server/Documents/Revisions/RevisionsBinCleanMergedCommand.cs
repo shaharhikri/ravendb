@@ -21,7 +21,7 @@ public partial class RevisionsStorage
 
         public long _maxReadsPerBatch;
 
-        public (long DeletedRevisions, long DeletedEntries)? Result { get; private set; }
+        public (long DeletedEntries, bool HasMore)? Result { get; private set; }
 
         public RevisionsBinCleanMergedCommand(DateTime before, long maxTotalDeletes, long maxReadsPerBatch)
         {
@@ -36,14 +36,14 @@ public partial class RevisionsStorage
             var newState = state.Clone();
             Result = DeleteRevisions(context, newState);
             if(newState.Equals(state) == false)
-                context.DocumentDatabase.DocumentsStorage.SetLastRevisionsBinCleanerState(context, state);
+                context.DocumentDatabase.DocumentsStorage.SetLastRevisionsBinCleanerState(context, newState);
             return 1;
         }
 
-        private (long Deleted, long DeletedEntries)? DeleteRevisions(DocumentsOperationContext context, RevisionsBinCleanerState state)
+        private (long DeletedRevisions, bool HasMore)? DeleteRevisions(DocumentsOperationContext context, RevisionsBinCleanerState state)
         {
             if (_maxReadsPerBatch == 0)
-                return (0, 0);
+                return (0, false);
 
             var revisionsStorage = context.DocumentDatabase.DocumentsStorage.RevisionsStorage;
             var revisions = revisionsStorage.GetRevisionsBinEntries(context, _before, DocumentFields.Id | DocumentFields.ChangeVector, state); // forget about enumerator
@@ -54,6 +54,7 @@ public partial class RevisionsStorage
 
             foreach (var r in revisions)
             {
+                numOfReads++;
                 var id = r.Id;
                 using (DocumentIdWorker.GetSliceFromId(context, id, out Slice lowerId))
                 using (revisionsStorage.GetKeyPrefix(context, lowerId, out Slice prefixSlice))
@@ -72,8 +73,8 @@ public partial class RevisionsStorage
                     if (result.MoreWork == false)
                     {
                         deletedEntries++;
-                        long lastEtag = ChangeVectorUtils.GetEtagById(r.ChangeVector, context.DocumentDatabase.DbBase64Id);
-                        state.Etag = lastEtag;
+                        // long lastEtag = ChangeVectorUtils.GetEtagById(r.ChangeVector, context.DocumentDatabase.DbBase64Id);
+                        // state.Etag = lastEtag;
                     }
 
                     deletedRevisions += result.Deleted;
@@ -81,11 +82,12 @@ public partial class RevisionsStorage
                         break;
                 }
 
-                numOfReads++;
                 if (numOfReads == _maxReadsPerBatch)
                     break;
             }
-            return (deletedRevisions, deletedEntries);
+
+            var hasMore = (deletedRevisions < _maxTotalDeletes && numOfReads < _maxReadsPerBatch) == false;
+            return (deletedEntries, hasMore);
         }
 
         public override IReplayableCommandDto<DocumentsOperationContext, DocumentsTransaction, MergedTransactionCommand<DocumentsOperationContext, DocumentsTransaction>> ToDto(DocumentsOperationContext context)

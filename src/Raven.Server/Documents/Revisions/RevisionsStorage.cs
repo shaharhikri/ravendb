@@ -832,7 +832,7 @@ namespace Raven.Server.Documents.Revisions
                     DeleteRevisionFromTable(context, table, writeTables, lastRevisionToDelete, collectionName, changeVector, lastModifiedTicks, tombstoneFlags);
                     deleted++;
 
-                    revisionsBinCleanerStateChanged |= UpdateRevisionsBinCleanerStateIfNeeded(context, revisionsBinCleanerState, lastRevisionToDelete);
+                    // revisionsBinCleanerStateChanged |= UpdateRevisionsBinCleanerStateIfNeeded(context, revisionsBinCleanerState, lastRevisionToDelete);
                 }
             }
 
@@ -2495,14 +2495,17 @@ namespace Raven.Server.Documents.Revisions
             while (ended == false)
             {
                 ended = true;
-                foreach (var seekResult in table.SeekForwardFrom(RevisionsSchema.Indexes[DeleteRevisionEtagSlice], Slices.BeforeAllKeys, state.Skip))
+
+                using var d = DocumentsStorage.GetEtagAsSlice(context, state.Etag, out var startSlice);
+
+                foreach (var seekResult in table.SeekForwardFrom(RevisionsSchema.Indexes[DeleteRevisionEtagSlice], startSlice, 0 /*, Slices.BeforeAllKeys, state.Skip*/))
                 {
                     var tvr = seekResult.Result;
                     var storageId = tvr.Reader.Id;
                     var etag = TableValueToEtag((int)RevisionsTable.DeletedEtag, ref tvr.Reader);
                     if (etag == NotDeletedRevisionMarker)
                     {
-                        state.Skip++;
+                        // state.Skip++;
                         context.Transaction.InnerTransaction.ForgetAbout(storageId);
                         continue;
                     }
@@ -2511,7 +2514,7 @@ namespace Raven.Server.Documents.Revisions
                     {
                         if (IsRevisionsBinEntry(context, table, lowerId, etag) == false) // if its not last - continue
                         {
-                            state.Skip++;
+                            // state.Skip++;
                             context.Transaction.InnerTransaction.ForgetAbout(storageId);
                             continue;
                         }
@@ -2519,9 +2522,9 @@ namespace Raven.Server.Documents.Revisions
 
                     var deleteRevision = TableValueToRevision(context, ref tvr.Reader, fields);
                     if (deleteRevision.LastModified >= before)
-                    { 
-                       context.Transaction.ForgetAbout(deleteRevision);
-                       yield break;
+                    {
+                        context.Transaction.ForgetAbout(deleteRevision);
+                        yield break;
                     }
 
                     yield return deleteRevision;
