@@ -238,7 +238,7 @@ namespace Raven.Server.Commercial
 
         public bool HasEmbeddingsGeneration => Enabled(LicenseAttribute.AiEmbeddingsGen);
 
-        public bool HasGenAi => true; //TODO: Enabled(LicenseAttribute.GenAi);
+        public bool HasGenAi => Enabled(LicenseAttribute.GenAi);
 
         public bool HasPowerBI => Enabled(LicenseAttribute.PowerBI);
 
