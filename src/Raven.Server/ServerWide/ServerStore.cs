@@ -43,7 +43,7 @@ using Raven.Server.Config;
 using Raven.Server.Config.Settings;
 using Raven.Server.Dashboard;
 using Raven.Server.Documents;
-using Raven.Server.Documents.AI.AiGen;
+using Raven.Server.Documents.AI;
 using Raven.Server.Documents.Indexes;
 using Raven.Server.Documents.Indexes.Analysis;
 using Raven.Server.Documents.Indexes.Sorting;
