@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.Counters;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Server.Documents.AI;
 using Raven.Server.Documents.AI.AiGen;
 using Raven.Server.Documents.ETL.Metrics;
 using Raven.Server.Documents.ETL.Providers.AI.Embeddings;
@@ -45,22 +46,20 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
     {
         Metrics = new EtlMetricsCountersManager();
 
+        if (string.IsNullOrWhiteSpace(configuration.JsonSchema))
+            configuration.JsonSchema = AbstractChatCompletionClient.GetSchemaFor(configuration.SampleObject);
+        
         if (configuration.TestMode == false)
-            _chatCompletionClient = GetClient(configuration);
+            _chatCompletionClient = GetClient();
     }
 
-    private static AbstractChatCompletionClient GetClient(GenAiConfiguration cfg)
+    private AbstractChatCompletionClient GetClient()
     {
-        var connectorType = cfg.Connection.GetActiveProvider();
-        if (string.IsNullOrWhiteSpace(cfg.JsonSchema))
-        {
-            cfg.JsonSchema = AbstractChatCompletionClient.GetSchemaFor(cfg.SampleObject);
-        }
-
+        var connectorType = Configuration.Connection.GetActiveProvider();
         AbstractChatCompletionClient client = connectorType switch
         {
-            AiConnectorType.Ollama => new OllamaChatCompletionClient(cfg),
-            AiConnectorType.OpenAi => new OpenAiChatCompletionClient(cfg),
+            AiConnectorType.Ollama => new OllamaChatCompletionClient(Configuration, Database.ServerStore.ContextPool, AbstractChatCompletionClient.DefaultConventions),
+            AiConnectorType.OpenAi => new OpenAiChatCompletionClient(Configuration, Database.ServerStore.ContextPool, AbstractChatCompletionClient.DefaultConventions),
             _ => throw new NotSupportedException(connectorType.ToString())
         };
 
@@ -198,7 +197,7 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
                 statsScope.TotalSentToModel++;
 
                 string json = item.ContextOutput.Context.ToString();
-                tasks.Add(_chatCompletionClient.CompleteAsync(Configuration.Prompt, json));
+                tasks.Add(_chatCompletionClient.CompleteAsync(Configuration.Prompt, json, Database.DatabaseShutdown));
             }
 
             try
@@ -297,7 +296,7 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
                 context.CloseTransaction();
                 break;
             case TestStage.SendToModel:
-                _chatCompletionClient ??= GetClient(Configuration);
+                _chatCompletionClient ??= GetClient();
                 items = testGenAiScript.Input;
                 exceptions = SendToModel(items, context, scope);
                 break;
