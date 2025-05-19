@@ -120,7 +120,7 @@ async function navigateToStep(canvas: Canvas, step: EditGenAiTaskStepId) {
 
 const sampleContextScript = `for(const comment of this.Comments)
 {
-    context({Text: comment.Text, Author: comment.Author, Id: comment.Id}, comment.AiHash);
+    context({Text: comment.Text, Author: comment.Author, Id: comment.Id});
 }`;
 
 const samplePrompt = "Check if the following blog post comment is spam or not";
@@ -134,8 +134,4 @@ const sampleUpdateScript = `const idx = this.Comments.findIndex(c => c.Id == $in
 if($output.Blocked)
 {
     this.Comments.splice(idx, 1); // remove
-}
-else 
-{
-    this.Comments[idx].AiHash = $aiHash; // remember this decision
 }`;
