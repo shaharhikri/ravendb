@@ -7,6 +7,7 @@ import "./AceEditor.scss";
 import classNames from "classnames";
 import AceEditorContext from "./AceEditorContext";
 import AceEditorFullScreenAction from "./AceEditorFullScreenAction";
+import AceEditorFormatAction from "./AceEditorFormatAction";
 
 interface ActionItem {
     component: ReactNode;
@@ -184,5 +185,6 @@ const removeFindNextCommand = (editor: Ace.Editor) => {
 };
 
 AceEditor.FullScreenAction = AceEditorFullScreenAction;
+AceEditor.FormatAction = AceEditorFormatAction;
 
 export default AceEditor;
