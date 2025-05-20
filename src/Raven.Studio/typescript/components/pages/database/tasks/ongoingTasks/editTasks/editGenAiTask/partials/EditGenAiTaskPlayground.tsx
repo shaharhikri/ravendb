@@ -333,7 +333,7 @@ export default function EditGenAiTaskPlayground() {
                                 <EditModeWarning />
                                 <FormGroup className="hstack justify-content-end" marginClass="mb-2">
                                     <FormSwitch control={control} name="isForceSendingCachedObjects">
-                                        Force sending cached data
+                                        Force reprocess
                                     </FormSwitch>
                                 </FormGroup>
                                 {isPlaygroundEditMode && (
