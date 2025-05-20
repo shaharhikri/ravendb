@@ -1,4 +1,3 @@
-import { HStack } from "components/common/utilities/HStack";
 import EditGenAiTaskContextFields from "../fields/EditGenAiTaskContextFields";
 import { useAppDispatch, useAppSelector } from "components/store";
 import Button from "react-bootstrap/Button";
@@ -10,11 +9,15 @@ import { AboutViewHeading } from "components/common/AboutView";
 import ButtonWithSpinner from "components/common/ButtonWithSpinner";
 import { useEditGenAiTaskTests } from "../../hooks/useEditGenAiTaskTests";
 import { ConditionalPopover } from "components/common/ConditionalPopover";
+import EditGenAiTaskInfoHub from "../../EditGenAiTaskInfoHub";
 
 export function EditGenAiTaskStepContext() {
     return (
         <>
-            <AboutViewHeading title="Specify task context" marginBottom={4} icon="ai-etl" />
+            <div className="hstack justify-content-between">
+                <AboutViewHeading title="Specify task context" marginBottom={4} icon="ai-etl" />
+                <EditGenAiTaskInfoHub />
+            </div>
             <EditGenAiTaskContextFields />
         </>
     );
@@ -41,7 +44,7 @@ export function EditGenAiTaskStepContextFooter() {
     const isTestButtonDisabled = !formValues.playgroundDocument;
 
     return (
-        <HStack className="justify-content-between">
+        <div className="hstack justify-content-between">
             <Button
                 variant="secondary"
                 className="rounded-pill"
@@ -49,7 +52,7 @@ export function EditGenAiTaskStepContextFooter() {
             >
                 <Icon icon="arrow-left" /> Back
             </Button>
-            <HStack gap={2}>
+            <div className="hstack gap-2">
                 <ConditionalPopover
                     conditions={[
                         {
@@ -73,7 +76,7 @@ export function EditGenAiTaskStepContextFooter() {
                 <Button variant="primary" className="rounded-pill" onClick={handleNext}>
                     Next <Icon icon="arrow-right" margin="ms-1" />
                 </Button>
-            </HStack>
-        </HStack>
+            </div>
+        </div>
     );
 }

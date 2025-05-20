@@ -2,7 +2,6 @@ import { useAppDispatch, useAppSelector } from "components/store";
 import Button from "react-bootstrap/Button";
 import { editGenAiTaskActions, editGenAiTaskSelectors } from "../../store/editGenAiTaskSlice";
 import { Icon } from "components/common/Icon";
-import { HStack } from "components/common/utilities/HStack";
 import EditGenAiTaskBasicFields from "../fields/EditGenAiTaskBasicFields";
 import { useFormContext, useWatch } from "react-hook-form";
 import { EditGenAiTaskFormData } from "../../utils/editGenAiTaskValidation";
@@ -10,13 +9,17 @@ import { AboutViewHeading } from "components/common/AboutView";
 import { databaseSelectors } from "components/common/shell/databaseSliceSelectors";
 import ButtonWithSpinner from "components/common/ButtonWithSpinner";
 import ConnectionTestResult from "components/common/connectionTests/ConnectionTestResult";
+import EditGenAiTaskInfoHub from "../../EditGenAiTaskInfoHub";
 
 export function EditGenAiTaskStepBasic() {
     const connectionStringTest = useAppSelector(editGenAiTaskSelectors.connectionStringTest);
 
     return (
         <div>
-            <AboutViewHeading title="Configure GenAI task settings" marginBottom={4} icon="ai-etl" />
+            <div className="hstack justify-content-between">
+                <AboutViewHeading title="Configure GenAI task settings" marginBottom={4} icon="ai-etl" />
+                <EditGenAiTaskInfoHub />
+            </div>
             <EditGenAiTaskBasicFields />
             <div className="mt-2">
                 <ConnectionTestResult testResult={connectionStringTest.data} />
@@ -56,7 +59,7 @@ export function EditGenAiTaskStepBasicFooter() {
     };
 
     return (
-        <HStack gap={2} className="justify-content-end">
+        <div className="hstack gap-2 justify-content-end">
             <ButtonWithSpinner
                 variant="info"
                 className="rounded-pill"
@@ -70,7 +73,7 @@ export function EditGenAiTaskStepBasicFooter() {
             <Button variant="primary" className="rounded-pill" onClick={handleNext}>
                 Next <Icon icon="arrow-right" margin="ms-1" />
             </Button>
-        </HStack>
+        </div>
     );
 }
 

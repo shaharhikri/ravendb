@@ -4,10 +4,8 @@ import AceEditor from "components/common/AceEditor";
 import aceDiff from "common/helpers/text/aceDiff";
 import ReactAce from "react-ace/lib/ace";
 import { useRef, useEffect } from "react";
-import { HStack } from "components/common/utilities/HStack";
 import { Icon } from "components/common/Icon";
 import Button from "react-bootstrap/Button";
-import { VStack } from "components/common/utilities/VStack";
 import { useEditGenAiTaskTests } from "../hooks/useEditGenAiTaskTests";
 import ButtonWithSpinner from "components/common/ButtonWithSpinner";
 import EditGenAiTaskReadOnlyVirtualList from "./EditGenAiTaskReadOnlyVirtualList";
@@ -29,15 +27,15 @@ export default function EditGenAiTaskTestResults() {
     const { handleContextTest, handleModelInputTest } = useEditGenAiTaskTests();
 
     return (
-        <VStack className="test-results">
+        <div className="vstack test-results">
             {currentStep === "context" && (
                 <>
-                    <HStack className="mb-3 justify-content-between">
+                    <div className="hstack mb-3 justify-content-between">
                         <h3 className="mb-0">
                             <Icon icon="test" />
                             Task context test results
                         </h3>
-                        <HStack gap={2}>
+                        <div className="hstack gap-2">
                             <ButtonWithSpinner
                                 variant="primary"
                                 className="rounded-pill"
@@ -55,8 +53,8 @@ export default function EditGenAiTaskTestResults() {
                                 <Icon icon="cancel" />
                                 Close
                             </Button>
-                        </HStack>
-                    </HStack>
+                        </div>
+                    </div>
                     {contextTest.data?.length === 0 ? (
                         <EmptySet>No results</EmptySet>
                     ) : (
@@ -66,12 +64,12 @@ export default function EditGenAiTaskTestResults() {
             )}
             {currentStep === "modelInput" && (
                 <>
-                    <HStack className="mb-3 justify-content-between">
+                    <div className="hstack mb-3 justify-content-between">
                         <h3 className="mb-0">
                             <Icon icon="test" />
                             Model input test results
                         </h3>
-                        <HStack gap={2}>
+                        <div className="hstack gap-2">
                             <ButtonWithSpinner
                                 variant="primary"
                                 className="rounded-pill"
@@ -89,8 +87,8 @@ export default function EditGenAiTaskTestResults() {
                                 <Icon icon="cancel" />
                                 Close
                             </Button>
-                        </HStack>
-                    </HStack>
+                        </div>
+                    </div>
                     <ModelUsage />
                     {modelInputTest.data?.length === 0 ? (
                         <EmptySet>No results</EmptySet>
@@ -100,7 +98,7 @@ export default function EditGenAiTaskTestResults() {
                 </>
             )}
             {currentStep === "updateScript" && <UpdateScriptResult />}
-        </VStack>
+        </div>
     );
 }
 
@@ -116,19 +114,19 @@ function ModelUsage() {
             <PopoverWithHoverWrapper
                 message={
                     <div>
-                        <HStack className="justify-content-between gap-3">
+                        <div className="hstack justify-content-between gap-3">
                             <span>Prompt tokens</span>
                             <span>{modelUsage.data.promptTokens}</span>
-                        </HStack>
-                        <HStack className="justify-content-between gap-3">
+                        </div>
+                        <div className="hstack justify-content-between gap-3">
                             <span>Completion tokens</span>
                             <span>{modelUsage.data.completionTokens}</span>
-                        </HStack>
+                        </div>
                         <hr className="my-1" />
-                        <HStack className="justify-content-between gap-3">
+                        <div className="hstack justify-content-between gap-3">
                             <span>Tokens usage</span>
                             <span>{modelUsage.data.totalTokens}</span>
-                        </HStack>
+                        </div>
                     </div>
                 }
             >
@@ -151,12 +149,12 @@ function UpdateScriptResult() {
 
     return (
         <>
-            <HStack className="mb-3 justify-content-between">
+            <div className="hstack mb-3 justify-content-between">
                 <h3 className="mb-0">
                     <Icon icon="test" />
                     Update script test results
                 </h3>
-                <HStack gap={2}>
+                <div className="hstack gap-2">
                     <ButtonWithSpinner
                         variant="primary"
                         className="rounded-pill"
@@ -174,18 +172,18 @@ function UpdateScriptResult() {
                         <Icon icon="cancel" />
                         Close
                     </Button>
-                </HStack>
-            </HStack>
+                </div>
+            </div>
             {updateScriptTest.data == null ? (
                 <EmptySet>No results</EmptySet>
             ) : (
                 <div className="flex-grow-1 update-script-result">
-                    <HStack className="justify-content-between">
+                    <div className="hstack justify-content-between">
                         <div>Test result</div>
                         <Switch selected={isSplitDiff} toggleSelection={toggleIsSplitDiff} color="primary">
                             Split view
                         </Switch>
-                    </HStack>
+                    </div>
                     <SizeGetter
                         isHeighRequired
                         render={({ height }) =>
@@ -226,7 +224,7 @@ function UpdateScriptDiffSplit({ height }: { height: number }) {
     }
 
     return (
-        <VStack gap={2} className="update-script-result">
+        <div className="vstack gap-2 update-script-result">
             <div className="diff-wrapper">
                 <div className="diff-header">Original document</div>
                 <AceEditor
@@ -241,7 +239,7 @@ function UpdateScriptDiffSplit({ height }: { height: number }) {
                 <div className="diff-header">Modified document</div>
                 <AceEditor aceRef={newDocRef} value={newDoc} mode="json" height={`${height / 2 - 100}px`} readOnly />
             </div>
-        </VStack>
+        </div>
     );
 }
 

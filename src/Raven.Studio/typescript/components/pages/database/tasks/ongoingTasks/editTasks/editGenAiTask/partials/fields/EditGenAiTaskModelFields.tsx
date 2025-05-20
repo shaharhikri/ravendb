@@ -7,8 +7,8 @@ import Button from "react-bootstrap/Button";
 import Badge from "react-bootstrap/Badge";
 import { ReactNode } from "react";
 import IconName from "typings/server/icons";
-import { HStack } from "components/common/utilities/HStack";
 import EditGenAiLoadFile from "../EditGenAiLoadFile";
+import PopoverWithHoverWrapper from "components/common/PopoverWithHoverWrapper";
 
 export default function EditGenAiTaskModelFields() {
     const {
@@ -21,12 +21,22 @@ export default function EditGenAiTaskModelFields() {
     return (
         <>
             <FormGroup>
-                <FormLabel>Prompt</FormLabel>
+                <FormLabel>
+                    Prompt
+                    <PopoverWithHoverWrapper message="TODO">
+                        <Icon icon="info" color="info" margin="ms-1" />
+                    </PopoverWithHoverWrapper>
+                </FormLabel>
                 <FormAceEditor control={control} name="prompt" mode="text" />
             </FormGroup>
             {formValues.schemaProvider == null && (
                 <div>
-                    <div className="mb-1">JSON schema</div>
+                    <div className="mb-1">
+                        JSON schema
+                        <PopoverWithHoverWrapper message="TODO">
+                            <Icon icon="info" color="info" margin="ms-1" />
+                        </PopoverWithHoverWrapper>
+                    </div>
                     <Row>
                         <Col>
                             <SchemaProviderButton
@@ -57,14 +67,19 @@ export default function EditGenAiTaskModelFields() {
             {formValues.schemaProvider === "sampleObject" && (
                 <FormGroup>
                     <FormLabel className="hstack justify-content-between">
-                        <div>Sample Object</div>
-                        <HStack gap={2}>
+                        <div>
+                            Sample Object
+                            <PopoverWithHoverWrapper message="TODO">
+                                <Icon icon="info" color="info" margin="ms-1" />
+                            </PopoverWithHoverWrapper>
+                        </div>
+                        <div className="hstack gap-2">
                             <EditGenAiLoadFile name="sampleObject" />
                             <Button variant="link" size="xs" onClick={() => setValue("schemaProvider", "jsonSchema")}>
                                 <Icon icon="edit" />
                                 Provide JSON Schema manually
                             </Button>
-                        </HStack>
+                        </div>
                     </FormLabel>
                     <FormAceEditor control={control} name="sampleObject" mode="json" />
                 </FormGroup>
@@ -72,14 +87,19 @@ export default function EditGenAiTaskModelFields() {
             {formValues.schemaProvider === "jsonSchema" && (
                 <FormGroup>
                     <FormLabel className="hstack justify-content-between">
-                        <div>JSON Schema</div>
-                        <HStack gap={2}>
+                        <div>
+                            JSON Schema
+                            <PopoverWithHoverWrapper message="TODO">
+                                <Icon icon="info" color="info" margin="ms-1" />
+                            </PopoverWithHoverWrapper>
+                        </div>
+                        <div className="hstack gap-2">
                             <EditGenAiLoadFile name="jsonSchema" />
                             <Button variant="link" size="xs" onClick={() => setValue("schemaProvider", "sampleObject")}>
                                 <Icon icon="default" />
                                 Use sample object
                             </Button>
-                        </HStack>
+                        </div>
                     </FormLabel>
                     <FormAceEditor control={control} name="jsonSchema" mode="json" />
                 </FormGroup>

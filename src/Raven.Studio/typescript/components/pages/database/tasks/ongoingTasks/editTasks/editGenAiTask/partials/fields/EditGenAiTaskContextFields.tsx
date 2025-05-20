@@ -12,6 +12,8 @@ import ReactAce from "react-ace/lib/ace";
 import Button from "react-bootstrap/Button";
 
 import "ace-builds/src-noconflict/ext-beautify";
+import PopoverWithHoverWrapper from "components/common/PopoverWithHoverWrapper";
+import { Icon } from "components/common/Icon";
 const beautify = ace.require("ace/ext/beautify").beautify;
 
 export default function EditGenAiTaskContextFields() {
@@ -27,7 +29,12 @@ export default function EditGenAiTaskContextFields() {
     return (
         <>
             <FormGroup>
-                <FormLabel>Collection Name</FormLabel>
+                <FormLabel>
+                    Collection name
+                    <PopoverWithHoverWrapper message="TODO">
+                        <Icon icon="info" color="info" margin="ms-1" />
+                    </PopoverWithHoverWrapper>
+                </FormLabel>
                 <FormSelectCreatable control={control} name="collectionName" options={collectionOptions} />
             </FormGroup>
             <Button variant="primary" onClick={() => beautify(scriptRef.current?.editor.session)}>
@@ -35,7 +42,12 @@ export default function EditGenAiTaskContextFields() {
             </Button>
             <FormGroup>
                 <FormLabel className="hstack justify-content-between">
-                    Context extraction script
+                    <div>
+                        Context extraction script
+                        <PopoverWithHoverWrapper message="TODO">
+                            <Icon icon="info" color="info" margin="ms-1" />
+                        </PopoverWithHoverWrapper>
+                    </div>
                     <EditGenAiLoadFile name="script" />
                 </FormLabel>
                 <FormAceEditor aceRef={scriptRef} control={control} name="script" mode="javascript" />

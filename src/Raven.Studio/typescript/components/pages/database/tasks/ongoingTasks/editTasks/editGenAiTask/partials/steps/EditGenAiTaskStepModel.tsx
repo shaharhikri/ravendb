@@ -1,4 +1,3 @@
-import { HStack } from "components/common/utilities/HStack";
 import { useAppDispatch, useAppSelector } from "components/store";
 import { Icon } from "components/common/Icon";
 import Button from "react-bootstrap/Button";
@@ -10,11 +9,15 @@ import { AboutViewHeading } from "components/common/AboutView";
 import ButtonWithSpinner from "components/common/ButtonWithSpinner";
 import { useEditGenAiTaskTests } from "../../hooks/useEditGenAiTaskTests";
 import { ConditionalPopover } from "components/common/ConditionalPopover";
+import EditGenAiTaskInfoHub from "../../EditGenAiTaskInfoHub";
 
 export function EditGenAiTaskStepModel() {
     return (
         <>
-            <AboutViewHeading title="Model input" marginBottom={4} icon="ai-etl" />
+            <div className="hstack justify-content-between">
+                <AboutViewHeading title="Model input" marginBottom={4} icon="ai-etl" />
+                <EditGenAiTaskInfoHub />
+            </div>
             <EditGenAiTaskModelFields />
         </>
     );
@@ -39,7 +42,7 @@ export function EditGenAiTaskStepModelFooter() {
     };
 
     return (
-        <HStack className="justify-content-between">
+        <div className="hstack justify-content-between">
             <Button
                 variant="secondary"
                 className="rounded-pill"
@@ -47,7 +50,7 @@ export function EditGenAiTaskStepModelFooter() {
             >
                 <Icon icon="arrow-left" /> Back
             </Button>
-            <HStack gap={2}>
+            <div className="hstack gap-2">
                 <ConditionalPopover
                     conditions={[
                         {
@@ -71,7 +74,7 @@ export function EditGenAiTaskStepModelFooter() {
                 <Button variant="primary" className="rounded-pill" onClick={handleNext}>
                     Next <Icon icon="arrow-right" margin="ms-1" />
                 </Button>
-            </HStack>
-        </HStack>
+            </div>
+        </div>
     );
 }

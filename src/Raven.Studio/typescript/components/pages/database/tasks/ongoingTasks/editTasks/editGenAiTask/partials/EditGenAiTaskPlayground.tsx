@@ -1,10 +1,8 @@
 import { useFieldArray, useWatch } from "react-hook-form";
 import { useFormContext } from "react-hook-form";
 import { EditGenAiTaskFormData } from "../utils/editGenAiTaskValidation";
-import { HStack } from "components/common/utilities/HStack";
 import { Icon } from "components/common/Icon";
 import Button from "react-bootstrap/Button";
-import { VStack } from "components/common/utilities/VStack";
 import { databaseSelectors } from "components/common/shell/databaseSliceSelectors";
 import { useAppDispatch, useAppSelector } from "components/store";
 import { useServices } from "components/hooks/useServices";
@@ -30,6 +28,7 @@ import { Switch } from "components/common/Checkbox";
 import { ConditionalPopover } from "components/common/ConditionalPopover";
 import EditGenAiTaskFormVirtualList from "./EditGenAiTaskFormVirtualList";
 import { SelectOption } from "components/common/select/Select";
+import PopoverWithHoverWrapper from "components/common/PopoverWithHoverWrapper";
 
 type PlaygroundTab = "document" | "context" | "modelOutput";
 
@@ -152,10 +151,12 @@ export default function EditGenAiTaskPlayground() {
 
     return (
         <div className="playground">
-            <HStack>
+            <div className="hstack">
                 <div>
                     Playground
-                    <Icon icon="info" margin="ms-1" />
+                    <PopoverWithHoverWrapper message="TODO">
+                        <Icon icon="info" color="info" margin="ms-1" />
+                    </PopoverWithHoverWrapper>
                 </div>
                 <div className="playground-line"></div>
                 <div>
@@ -168,11 +169,11 @@ export default function EditGenAiTaskPlayground() {
                         {isPlaygroundCollapsed ? "Expand" : "Collapse"}
                     </Button>
                 </div>
-            </HStack>
+            </div>
             <Collapse in={!isPlaygroundCollapsed} mountOnEnter unmountOnExit>
                 <div className="panel-bg-1 border border-secondary rounded-2 mt-1">
                     <Tab.Container id="playground-tabs" activeKey={activeTab}>
-                        <HStack className="panel-bg-2 border-bottom border-secondary p-2 justify-content-between">
+                        <div className="hstack panel-bg-2 border-bottom border-secondary p-2 justify-content-between border-top-left-radius border-top-right-radius">
                             <Nav>
                                 <Nav.Item onClick={() => setActiveTab("document")}>
                                     <ConditionalPopover
@@ -244,12 +245,12 @@ export default function EditGenAiTaskPlayground() {
                             >
                                 Edit mode
                             </Switch>
-                        </HStack>
+                        </div>
 
                         <Tab.Content className="p-3">
                             <Tab.Pane eventKey="document">
                                 {!formValues.playgroundDocument && (
-                                    <VStack className="align-items-center py-3">
+                                    <div className="vstack align-items-center py-3">
                                         {isDocumentInfoVisible && (
                                             <RichAlert
                                                 variant="info"
@@ -283,13 +284,13 @@ export default function EditGenAiTaskPlayground() {
                                         <Button variant="link" onClick={handleProvideContentManually} size="sm">
                                             <Icon icon="edit" />I want to provide content manually
                                         </Button>
-                                    </VStack>
+                                    </div>
                                 )}
                                 {formValues.playgroundDocument && (
                                     <div>
                                         <EditModeWarning />
-                                        <HStack
-                                            className={classNames("mb-1", {
+                                        <div
+                                            className={classNames("hstack mb-1", {
                                                 "justify-content-end": !formValues.documentId,
                                                 "justify-content-between": formValues.documentId,
                                             })}
@@ -307,7 +308,7 @@ export default function EditGenAiTaskPlayground() {
                                                 <Icon icon="reset" />
                                                 Reset selection
                                             </Button>
-                                        </HStack>
+                                        </div>
                                         <FormAceEditor
                                             control={control}
                                             name="playgroundDocument"

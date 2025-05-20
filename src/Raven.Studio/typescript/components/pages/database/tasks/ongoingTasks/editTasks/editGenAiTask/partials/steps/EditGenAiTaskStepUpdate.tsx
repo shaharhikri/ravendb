@@ -5,23 +5,32 @@ import { useFormContext, useWatch } from "react-hook-form";
 import { editGenAiTaskActions, editGenAiTaskSelectors } from "../../store/editGenAiTaskSlice";
 import { Icon } from "components/common/Icon";
 import Button from "react-bootstrap/Button";
-import { HStack } from "components/common/utilities/HStack";
 import { EditGenAiTaskFormData } from "../../utils/editGenAiTaskValidation";
 import { AboutViewHeading } from "components/common/AboutView";
 import { useEditGenAiTaskTests } from "../../hooks/useEditGenAiTaskTests";
 import ButtonWithSpinner from "components/common/ButtonWithSpinner";
 import { ConditionalPopover } from "components/common/ConditionalPopover";
 import EditGenAiLoadFile from "../EditGenAiLoadFile";
+import PopoverWithHoverWrapper from "components/common/PopoverWithHoverWrapper";
+import EditGenAiTaskInfoHub from "../../EditGenAiTaskInfoHub";
 
 export function EditGenAiTaskStepUpdate() {
     const { control } = useFormContext<EditGenAiTaskFormData>();
 
     return (
         <>
-            <AboutViewHeading title="Provide document update script" marginBottom={4} icon="ai-etl" />
+            <div className="hstack justify-content-between">
+                <AboutViewHeading title="Provide document update script" marginBottom={4} icon="ai-etl" />
+                <EditGenAiTaskInfoHub />
+            </div>
             <FormGroup>
                 <FormLabel className="hstack justify-content-between">
-                    Update script
+                    <div>
+                        Update script
+                        <PopoverWithHoverWrapper message="TODO">
+                            <Icon icon="info" color="info" margin="ms-1" />
+                        </PopoverWithHoverWrapper>
+                    </div>
                     <EditGenAiLoadFile name="update" />
                 </FormLabel>
                 <FormAceEditor control={control} name="update" mode="javascript" />
@@ -50,7 +59,7 @@ export function EditGenAiTaskStepUpdateFooter() {
     const isTestButtonDisabled = !formValues.playgroundDocument || formValues.playgroundModelOutputs.length === 0;
 
     return (
-        <HStack className="justify-content-between">
+        <div className="hstack justify-content-between">
             <Button
                 variant="secondary"
                 className="rounded-pill"
@@ -58,7 +67,7 @@ export function EditGenAiTaskStepUpdateFooter() {
             >
                 <Icon icon="arrow-left" /> Back
             </Button>
-            <HStack gap={2}>
+            <div className="hstack gap-2">
                 <ConditionalPopover
                     conditions={[
                         {
@@ -86,7 +95,7 @@ export function EditGenAiTaskStepUpdateFooter() {
                 <Button variant="primary" className="rounded-pill" onClick={handleNext}>
                     Next <Icon icon="arrow-right" margin="ms-1" />
                 </Button>
-            </HStack>
-        </HStack>
+            </div>
+        </div>
     );
 }
