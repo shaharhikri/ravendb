@@ -5,7 +5,7 @@ import IconName from "typings/server/icons";
 import { Icon } from "./Icon";
 import Button from "react-bootstrap/Button";
 
-interface DialogOptions {
+export interface DialogOptions {
     title: ReactNode;
     icon?: IconName;
     actionColor?: ThemeColor;

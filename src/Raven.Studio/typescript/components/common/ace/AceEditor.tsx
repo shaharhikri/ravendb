@@ -6,10 +6,11 @@ import ReactAce, { IAceEditorProps, IAceOptions, ICommand } from "react-ace";
 import "./AceEditor.scss";
 import classNames from "classnames";
 import AceEditorContext from "./AceEditorContext";
-import AceEditorFullScreenAction from "./AceEditorFullScreenAction";
-import AceEditorFormatAction from "./AceEditorFormatAction";
-import AceEditorLoadFileAction from "./AceEditorLoadFileAction";
-import AceEditorDeleteAction from "./AceEditorDeleteAction";
+import AceEditorFullScreenAction from "./actions/AceEditorFullScreenAction";
+import AceEditorFormatAction from "./actions/AceEditorFormatAction";
+import AceEditorLoadFileAction from "./actions/AceEditorLoadFileAction";
+import AceEditorDeleteAction from "./actions/AceEditorDeleteAction";
+import AceEditorHelpAction from "./actions/AceEditorHelpAction";
 
 interface ActionItem {
     component: ReactNode;
@@ -193,5 +194,6 @@ AceEditor.FullScreenAction = AceEditorFullScreenAction;
 AceEditor.FormatAction = AceEditorFormatAction;
 AceEditor.LoadFileAction = AceEditorLoadFileAction;
 AceEditor.DeleteAction = AceEditorDeleteAction;
+AceEditor.HelpAction = AceEditorHelpAction;
 
 export default AceEditor;

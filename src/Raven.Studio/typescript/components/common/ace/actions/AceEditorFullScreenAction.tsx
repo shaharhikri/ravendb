@@ -1,6 +1,6 @@
 import { Icon } from "components/common/Icon";
 import Button from "react-bootstrap/Button";
-import { useAceEditorContext } from "./AceEditorContext";
+import { useAceEditorContext } from "../AceEditorContext";
 
 export default function AceEditorFullScreenAction() {
     const { reactAce } = useAceEditorContext();

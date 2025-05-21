@@ -11,6 +11,7 @@ import ReactAce from "react-ace/lib/ace";
 import PopoverWithHoverWrapper from "components/common/PopoverWithHoverWrapper";
 import { Icon } from "components/common/Icon";
 import AceEditor from "components/common/ace/AceEditor";
+import Code from "components/common/Code";
 
 export default function EditGenAiTaskContextFields() {
     const { control, setValue } = useFormContext<EditGenAiTaskFormData>();
@@ -55,9 +56,26 @@ export default function EditGenAiTaskContextFields() {
                                 />
                             ),
                         },
+                        {
+                            component: <AceEditor.HelpAction message={<ScriptSyntaxHelp />} />,
+                            position: "bottom",
+                        },
                     ]}
                 />
             </FormGroup>
         </>
+    );
+}
+
+function ScriptSyntaxHelp() {
+    const code = `for(const comment of this.Comments)
+{
+    context({Text: comment.Text, Author: comment.Author, Id: comment.Id});
+}`;
+
+    return (
+        <div>
+            <Code code={code} language="javascript" elementToCopy={code} />
+        </div>
     );
 }

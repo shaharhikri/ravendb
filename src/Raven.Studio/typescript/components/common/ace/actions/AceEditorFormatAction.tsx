@@ -1,6 +1,6 @@
 import { Icon } from "components/common/Icon";
 import Button from "react-bootstrap/Button";
-import { useAceEditorContext } from "./AceEditorContext";
+import { useAceEditorContext } from "../AceEditorContext";
 import "ace-builds/src-noconflict/ext-beautify";
 
 const beautify = ace.require("ace/ext/beautify").beautify;

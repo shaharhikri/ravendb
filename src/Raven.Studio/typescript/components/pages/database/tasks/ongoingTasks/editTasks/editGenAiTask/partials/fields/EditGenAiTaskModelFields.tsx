@@ -10,6 +10,7 @@ import IconName from "typings/server/icons";
 import PopoverWithHoverWrapper from "components/common/PopoverWithHoverWrapper";
 import AceEditor from "components/common/ace/AceEditor";
 import ReactAce from "react-ace";
+import Code from "components/common/Code";
 
 export default function EditGenAiTaskModelFields() {
     const {
@@ -38,7 +39,13 @@ export default function EditGenAiTaskModelFields() {
                     control={control}
                     name="prompt"
                     mode="text"
-                    actions={[{ component: <AceEditor.FullScreenAction /> }]}
+                    actions={[
+                        { component: <AceEditor.FullScreenAction /> },
+                        {
+                            component: <AceEditor.HelpAction message={<PromptSyntaxHelp />} />,
+                            position: "bottom",
+                        },
+                    ]}
                 />
             </FormGroup>
             {formValues.schemaProvider == null && (
@@ -105,6 +112,10 @@ export default function EditGenAiTaskModelFields() {
                                     />
                                 ),
                             },
+                            {
+                                component: <AceEditor.HelpAction message={<SampleObjectSyntaxHelp />} />,
+                                position: "bottom",
+                            },
                         ]}
                     />
                 </FormGroup>
@@ -138,6 +149,10 @@ export default function EditGenAiTaskModelFields() {
                                     />
                                 ),
                             },
+                            {
+                                component: <AceEditor.HelpAction message={<JsonSchemaSyntaxHelp />} />,
+                                position: "bottom",
+                            },
                         ]}
                     />
                 </FormGroup>
@@ -167,4 +182,46 @@ function SchemaProviderButton({ icon, title, description, handleClick }: SchemaP
             </div>
         </div>
     );
+}
+
+function PromptSyntaxHelp() {
+    const samplePrompt =
+        "Check if the following blog post comment is spam or not. A spam comment typically includes irrelevant or promotional content, excessive links, misleading information, or is written with the intent to manipulate search rankings or advertise products/services. Consider the language, intent, and relevance of the comment to the blog post topic. ";
+
+    return <Code code={samplePrompt} elementToCopy={samplePrompt} language="plaintext" whiteSpace="normal" />;
+}
+
+function SampleObjectSyntaxHelp() {
+    const code = `{
+    "Blocked": true,
+    "Reason": "Concise reason for why this comment was marked as spam or ham"
+}`;
+
+    return <Code code={code} elementToCopy={code} language="json" />;
+}
+
+function JsonSchemaSyntaxHelp() {
+    const code = `{
+  "name": "some-name",
+  "strict": true,
+  "schema": {
+    "type": "object",
+    "properties": {
+      "Blocked": {
+        "type": "boolean"
+      },
+      "Reason": {
+        "type": "string",
+        "description": "Concise reason for why this comment was marked as spam or ham"
+      }
+    },
+    "required": [
+      "Blocked",
+      "Reason"
+    ],
+    "additionalProperties": false
+  }
+}`;
+
+    return <Code code={code} elementToCopy={code} language="json" />;
 }

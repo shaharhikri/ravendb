@@ -33,9 +33,10 @@ interface CodeProps {
     className?: string;
     elementToCopy?: string;
     codeClassName?: string;
+    whiteSpace?: "pre" | "normal";
 }
 
-export default function Code({ code, language, className, elementToCopy, codeClassName }: CodeProps) {
+export default function Code({ code, language, className, elementToCopy, codeClassName, whiteSpace }: CodeProps) {
     const html = useMemo(() => Prism.highlight(code, Prism.languages[language], language), [code, language]);
 
     return (
@@ -52,7 +53,10 @@ export default function Code({ code, language, className, elementToCopy, codeCla
                 </Button>
             )}
             <pre className="code-classes d-flex flex-grow-1 m-0">
-                <code className={classNames(`language-${language}`, codeClassName)}>
+                <code
+                    className={classNames(`language-${language}`, codeClassName)}
+                    style={{ whiteSpace: whiteSpace ?? "pre" }}
+                >
                     <div dangerouslySetInnerHTML={{ __html: html }} />
                 </code>
             </pre>

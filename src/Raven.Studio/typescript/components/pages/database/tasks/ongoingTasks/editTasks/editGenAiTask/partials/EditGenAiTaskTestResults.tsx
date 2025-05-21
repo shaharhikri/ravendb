@@ -38,7 +38,7 @@ export default function EditGenAiTaskTestResults() {
                         <div className="hstack gap-2">
                             <ButtonWithSpinner
                                 variant="primary"
-                                className="rounded-pill"
+                                className="rounded-pill text-nowrap"
                                 onClick={handleContextTest}
                                 icon="reset"
                                 isSpinning={contextTest.status === "loading"}
@@ -72,7 +72,7 @@ export default function EditGenAiTaskTestResults() {
                         <div className="hstack gap-2">
                             <ButtonWithSpinner
                                 variant="primary"
-                                className="rounded-pill"
+                                className="rounded-pill text-nowrap"
                                 icon="reset"
                                 isSpinning={modelInputTest.status === "loading"}
                                 onClick={handleModelInputTest}
@@ -157,7 +157,7 @@ function UpdateScriptResult() {
                 <div className="hstack gap-2">
                     <ButtonWithSpinner
                         variant="primary"
-                        className="rounded-pill"
+                        className="rounded-pill text-nowrap"
                         icon="reset"
                         isSpinning={updateScriptTest.status === "loading"}
                         onClick={handleUpdateScriptTest}

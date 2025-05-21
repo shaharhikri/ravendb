@@ -15,6 +15,7 @@ import EditGenAiTaskInfoHub from "../../EditGenAiTaskInfoHub";
 import AceEditor from "components/common/ace/AceEditor";
 import ReactAce from "react-ace";
 import { useRef } from "react";
+import Code from "components/common/Code";
 
 export function EditGenAiTaskStepUpdate() {
     const { control, setValue } = useFormContext<EditGenAiTaskFormData>();
@@ -49,6 +50,10 @@ export function EditGenAiTaskStepUpdate() {
                                     onLoad={(value) => setValue("update", value, { shouldValidate: true })}
                                 />
                             ),
+                        },
+                        {
+                            component: <AceEditor.HelpAction message={<UpdateScriptSyntaxHelp />} />,
+                            position: "bottom",
                         },
                     ]}
                 />
@@ -116,4 +121,14 @@ export function EditGenAiTaskStepUpdateFooter() {
             </div>
         </div>
     );
+}
+
+function UpdateScriptSyntaxHelp() {
+    const code = `const idx = this.Comments.findIndex(c => c.Id == $input.Id);
+
+if ($output.Blocked) {
+    this.Comments.splice(idx, 1); // remove
+}`;
+
+    return <Code code={code} elementToCopy={code} language="javascript" />;
 }
