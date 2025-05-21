@@ -252,7 +252,6 @@ function UpdateScriptDiffSplit({ height }: { height: number }) {
 }
 
 function UpdateScriptDiffUnified({ height }: { height: number }) {
-    const ref = useRef<ReactAce>(null);
     const updateScriptTest = useAppSelector(editGenAiTaskSelectors.updateScriptTest);
 
     const oldDoc = useAppSelector(editGenAiTaskSelectors.updateScriptDocumentInput);
@@ -266,7 +265,6 @@ function UpdateScriptDiffUnified({ height }: { height: number }) {
         <div className="diff-wrapper">
             <div className="diff-header">Modified document</div>
             <AceUnifiedDiff
-                aceRef={ref}
                 value1={oldDoc.data}
                 value2={newDoc}
                 height={`${height - 100}px`}

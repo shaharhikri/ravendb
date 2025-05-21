@@ -12,7 +12,7 @@ interface GutterMeta {
     type: "add" | "remove" | "context";
 }
 
-interface AceUnifiedDiffProps extends Omit<AceEditorProps, "value"> {
+interface AceUnifiedDiffProps extends Omit<AceEditorProps, "value" | "aceRef"> {
     value1: string;
     value2: string;
 }
