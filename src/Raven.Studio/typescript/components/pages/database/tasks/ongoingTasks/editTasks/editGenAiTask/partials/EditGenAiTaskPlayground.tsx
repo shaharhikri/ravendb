@@ -249,10 +249,10 @@ export default function EditGenAiTaskPlayground() {
                                     className="mt-1"
                                 >
                                     Edit mode
+                                    <PopoverWithHoverWrapper message="You'll be able to manipulate the content, but beware that any changes made won't be saved outside the Playground.">
+                                        <Icon icon="info" color="info" margin="ms-1" />
+                                    </PopoverWithHoverWrapper>
                                 </Switch>
-                                <PopoverWithHoverWrapper message="You'll be able to manipulate the content, but beware that any changes made won't be saved outside the Playground.">
-                                    <Icon icon="info" color="info" margin="ms-1" />
-                                </PopoverWithHoverWrapper>
                             </div>
                         </div>
 
