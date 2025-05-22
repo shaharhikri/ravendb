@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.Counters;
 using Raven.Client.Documents.Operations.ETL;
+using Raven.Client.Extensions;
 using Raven.Server.Documents.AI;
 using Raven.Server.Documents.AI.AiGen;
 using Raven.Server.Documents.ETL.Metrics;
@@ -22,6 +23,7 @@ using Raven.Server.ServerWide.Context;
 using Raven.Server.Utils;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
+using Sparrow.Logging;
 using Sparrow.Server.Utils;
 using Encoding = System.Text.Encoding;
 using PatchRequest = Raven.Server.Documents.Patch.PatchRequest;
@@ -33,11 +35,11 @@ namespace Raven.Server.Documents.ETL.Providers.AI.GenAi;
 public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiConfiguration, AiConnectionString,
     GenAiStatsScope, GenAiPerformanceOperation>
 {
+    public const string GenAiTaskTag = "Gen/AI";
 
     internal const string GenAiHashesMetadataKey = "@genAiHashes";
 
     private const string TestDocumentId = "GenAi/TestDocument";
-    private const string GenAiTaskTag = "AI/Gen";
     private int _fallbackCounter = 0;
     private AbstractChatCompletionClient _chatCompletionClient;
 
@@ -113,30 +115,18 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
         return new GenAiScriptTransformer(Database, context, Transformation, null, Configuration);
     }
 
-    protected override string LoadFailureMessage => $"Failed to generate embeddings in '{Configuration.Name}' task. Going to do the retry in {FallbackTime} (failure #{_fallbackCounter}).";
+    protected override string LoadFailureMessage =>
+        $"Generative AI task '{Configuration.Name}' failed during model communication or update phase. Retrying in {FallbackTime}";
 
     protected override void EnterFallbackMode(Exception e, DateTime? lastErrorTime)
     {
-        // rate limits in embeddings are usually expressed as requests per minute or tokens per minute
-        // and they are reset on each full minute ticks, so we'll wait until the next full minute to retry
-        // at a minimum
-        int secondsToWaitToNextMinute = 60 - DateTime.UtcNow.Second;
-
-        var secondsToWait = ++_fallbackCounter switch
+        if (e is RateLimitException rateLimitException)
         {
-            // first - we'll wait for the next minute each time - 5 minutes total 
-            < 5 => secondsToWaitToNextMinute,
-            // then - we'll wait for ~two minutes - 10 minutes total
-            < 10 => secondsToWaitToNextMinute + 60,
-            // then - we'll wait for three minutes - 30 minutes
-            < 20 => secondsToWaitToNextMinute + 120,
-            // finally - we'll use log2 minutes - so at 20+ failures, wait 5 minutes - 1 hour total
-            // then after 32 failures, wait 6 minutes each time - 3.2 hours, etc...
-            _ => secondsToWaitToNextMinute + ((int)Math.Log2(_fallbackCounter) * 60)
-        };
+            FallbackTime = rateLimitException.RetryAfter;
+            return;
+        }
 
-        double max = Database.Configuration.Ai.EmbeddingsGenerationMaxFallbackTime.AsTimeSpan.TotalSeconds;
-        FallbackTime = TimeSpan.FromSeconds(Math.Min(secondsToWait, max));
+        base.EnterFallbackMode(e, lastErrorTime);
     }
 
     protected override int LoadInternal(IEnumerable<GenAiScriptResult> items, DocumentsOperationContext context, GenAiStatsScope scope)
@@ -149,30 +139,18 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
 
         ApplyUpdateScript(context, results);
 
-        if (exceptions is not null)
-            throw new AggregateException(exceptions);
+        if (exceptions?.Count > 0)
+        {
+            foreach (var e in exceptions)
+            {
+                if (e is RefusedToAnswerException or TooManyTokensException)
+                    continue;
+
+                throw e;
+            }
+        }
 
         return results.Count;
-    }
-
-    private void ApplyUpdateScript(DocumentsOperationContext context, List<GenAiResultItem> results)
-    {
-        PatchRequest req = new(Configuration.Update, PatchRequestType.AiGen);
-        var cmd = new GenAiBatchPatchCommand(context, results, req, Configuration.Name);
-
-        Database.TxMerger.Enqueue(cmd).GetAwaiter().GetResult();
-    }
-
-    protected override GenAiStatsScope CreateScope(EtlRunStats stats)
-    {
-        return new GenAiStatsScope(stats);
-    }
-
-    protected override string StatsAggregatorTag => "Generative AI";
-
-    protected override bool ShouldFilterOutHiLoDocument()
-    {
-        return true;
     }
 
     private List<Exception> SendToModel(List<GenAiResultItem> items, DocumentsOperationContext context, GenAiStatsScope scope)
@@ -181,7 +159,6 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
         {
             context.CloseTransaction();
 
-            List<Exception> exceptions = null;
             List<Task<(string Result, string Usage)>> tasks = [];
 
             foreach (var item in items)
@@ -210,49 +187,100 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
                 // we'll handle that later
             }
 
-            for (int index = 0; index < tasks.Count; index++)
+            return ProcessModelResults(items, context, tasks, statsScope);
+        }
+    }
+
+    private List<Exception> ProcessModelResults(List<GenAiResultItem> items, DocumentsOperationContext context, List<Task<(string Result, string Usage)>> tasks, GenAiStatsScope statsScope)
+    {
+        List<Exception> exceptions = null;
+
+        for (int index = 0; index < tasks.Count; index++)
+        {
+            var task = tasks[index];
+            var item = items[index];
+            if (task.IsCompletedSuccessfully is false)
             {
-                var task = tasks[index];
-                var item = items[index];
-                if (task.IsCompletedSuccessfully is false)
-                {
-                    exceptions ??= [];
-                    exceptions.Add(task.Exception);
-
-                    continue; // so we won't try to save it 
-                }
-
-                (string result, string usage) = task.Result;
-
-                //TODO: REALLY YUCKY!
-                var stream = new ReadOnlyMemoryStream<byte>(Encoding.UTF8.GetBytes(result));
-                item.ModelOutput = new ModelOutput
-                {
-                    Output = context.ReadForMemoryAsync(stream, item.DocId).GetAwaiter().GetResult()
-                };
-
-                stream.Dispose();
-
-                stream = new ReadOnlyMemoryStream<byte>(Encoding.UTF8.GetBytes(usage));
-                var usageBlittable = context.ReadForMemoryAsync(stream, item.DocId).GetAwaiter().GetResult();
-                usageBlittable.TryGet("total_tokens", out int tokensUsed);
-                usageBlittable.TryGet("prompt_tokens", out int promptTokens);
-                usageBlittable.TryGet("completion_tokens", out int completionTokens);
-
-                statsScope.TotalTokensUsed += tokensUsed;
-                statsScope.PromptTokensUsed += promptTokens;
-                statsScope.CompletionTokensUsed += completionTokens;
+                var singleEx = task.Exception.ExtractSingleInnerException();
 
                 if (Configuration.TestMode)
+                    throw singleEx;
+
+                switch (singleEx)
                 {
-                    item.ModelOutput.Usage = usageBlittable;
+                    case TooManyTokensException:
+                    case RefusedToAnswerException:
+                        var reason = singleEx is TooManyTokensException
+                            ? "Token limit exceeded"
+                            : "Model refused to answer";
+
+                        var msg = $"Model call failed for context in document '{item.DocId}' ({reason}). " +
+                                  $"Context was: {item.ContextOutput.Context}" + Environment.NewLine +
+                                  singleEx.Message;
+                        Statistics.RecordPartialLoadError(msg, item.DocId);
+                        Logger.Log(LogLevel.Warn, msg);
+                        break;
+                    default:
+                        item.UpdateHash = false;
+                        break;
                 }
 
-                stream.Dispose();
+                exceptions ??= [];
+                exceptions.Add(singleEx);
+
+                continue; // so we won't try to save it 
             }
 
-            return exceptions;
+            (string result, string usage) = task.Result;
+
+            //TODO: REALLY YUCKY!
+            var stream = new ReadOnlyMemoryStream<byte>(Encoding.UTF8.GetBytes(result));
+            item.ModelOutput = new ModelOutput
+            {
+                Output = context.ReadForMemoryAsync(stream, item.DocId).GetAwaiter().GetResult()
+            };
+
+            stream.Dispose();
+
+            stream = new ReadOnlyMemoryStream<byte>(Encoding.UTF8.GetBytes(usage));
+            var usageBlittable = context.ReadForMemoryAsync(stream, item.DocId).GetAwaiter().GetResult();
+            usageBlittable.TryGet("total_tokens", out int tokensUsed);
+            usageBlittable.TryGet("prompt_tokens", out int promptTokens);
+            usageBlittable.TryGet("completion_tokens", out int completionTokens);
+
+            statsScope.TotalTokensUsed += tokensUsed;
+            statsScope.PromptTokensUsed += promptTokens;
+            statsScope.CompletionTokensUsed += completionTokens;
+
+            if (Configuration.TestMode)
+            {
+                item.ModelOutput.Usage = usageBlittable;
+            }
+
+            stream.Dispose();
         }
+
+        return exceptions;
+    }
+
+    private void ApplyUpdateScript(DocumentsOperationContext context, List<GenAiResultItem> results)
+    {
+        PatchRequest req = new(Configuration.Update, PatchRequestType.AiGen);
+        var cmd = new GenAiBatchPatchCommand(context, results, req, Configuration.Name, Logger, Statistics);
+
+        Database.TxMerger.Enqueue(cmd).GetAwaiter().GetResult();
+    }
+
+    protected override GenAiStatsScope CreateScope(EtlRunStats stats)
+    {
+        return new GenAiStatsScope(stats);
+    }
+
+    protected override string StatsAggregatorTag => "Generative AI";
+
+    protected override bool ShouldFilterOutHiLoDocument()
+    {
+        return true;
     }
 
     public TestEtlScriptResult RunTest(TestGenAiScript testGenAiScript, DocumentsOperationContext context)
@@ -281,8 +309,8 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
             if (document == null)
                 throw new InvalidOperationException($"Document {testGenAiScript.DocumentId} does not exist");
         }
-        using var scope = new GenAiStatsScope(new EtlRunStats());
 
+        using var scope = new GenAiStatsScope(new EtlRunStats());
         switch (testGenAiScript.TestStage)
         {
             case TestStage.CreateContextObjects:
@@ -299,6 +327,9 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
                 _chatCompletionClient ??= GetClient();
                 items = testGenAiScript.Input;
                 exceptions = SendToModel(items, context, scope);
+                if (exceptions is not null)
+                    throw new AggregateException(exceptions);
+
                 break;
             case TestStage.ApplyUpdateScript:
                 {
@@ -372,9 +403,6 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
                 throw new InvalidOperationException("Unknown TestStage type : " + testGenAiScript.TestStage.GetType());
         }
 
-        if (exceptions is not null)
-            throw new AggregateException(exceptions);
-
         return new GenAiTestScriptResult
         {
             InputDocument = document.Data,
@@ -409,4 +437,6 @@ public sealed class GenAiTask : EtlProcess<AiEtlItem, GenAiScriptResult, GenAiCo
 
         return results;
     }
+
+    internal AbstractChatCompletionClient GetChatCompletionClient() => _chatCompletionClient;
 }

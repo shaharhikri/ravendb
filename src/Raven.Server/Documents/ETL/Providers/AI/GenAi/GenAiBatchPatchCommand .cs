@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
 using Raven.Client;
+using Raven.Client.Documents.Operations;
 using Raven.Server.Documents.Handlers.Batches;
 using Raven.Server.Documents.Patch;
 using Raven.Server.Documents.TransactionMerger.Commands;
 using Raven.Server.ServerWide.Context;
 using Sparrow.Json;
 using Sparrow.Json.Parsing;
+using Sparrow.Logging;
+using Sparrow.Server.Logging;
 using PatchRequest = Raven.Server.Documents.Patch.PatchRequest;
 
 namespace Raven.Server.Documents.ETL.Providers.AI.GenAi;
@@ -16,12 +19,15 @@ internal sealed class GenAiBatchPatchCommand : PatchDocumentCommandBase
     private readonly List<GenAiResultItem> _items;
     private readonly PatchRequest _patchRequest;
     private readonly string _taskName;
+    private readonly RavenLogger _logger;
+    private readonly EtlProcessStatistics _statistics;
 
-    public GenAiBatchPatchCommand(
-        DocumentsOperationContext context,
+    public GenAiBatchPatchCommand(DocumentsOperationContext context,
         List<GenAiResultItem> items,
         PatchRequest patchRequest,
-        string taskName)
+        string taskName,
+        RavenLogger logger, 
+        EtlProcessStatistics statistics)
         : base(
               context,
               skipPatchIfChangeVectorMismatch: false,
@@ -37,29 +43,53 @@ internal sealed class GenAiBatchPatchCommand : PatchDocumentCommandBase
         _patchRequest = patchRequest;
         _taskName = taskName;
         _database = context.DocumentDatabase;
+        _logger = logger;
+        _statistics = statistics;
     }
 
     protected override long ExecuteCmd(DocumentsOperationContext context)
     {
-        var hashes = new Dictionary<string, (BlittableJsonReaderObject Doc, DynamicJsonArray Hashes)>();
+        var hashes = new Dictionary<string, (BlittableJsonReaderObject Doc, List<string> Hashes)>();
 
         using (_database.Scripts.GetScriptRunner(_patchRequest, readOnly: false, out var runner))
         {
             foreach (var item in _items)
             {
+                if (item.UpdateHash == false)
+                    continue;
+
                 if (hashes.TryGetValue(item.DocId, out var tuple) == false)
-                {
-                    tuple = (null, new DynamicJsonArray());
-                }
+                    hashes[item.DocId] = tuple = (null, []);
+                
                 tuple.Hashes.Add(item.ContextOutput.AiHash);
 
                 if (item.ModelOutput is null)
                     continue; 
 
                 _patch = (_patchRequest, CreatePatchArgs(context, item));
+                PatchResult patchResult = null;
 
-                var patchResult = ExecuteOnDocument(context, item.DocId, expectedChangeVector: null, runner, runIfMissing: null);
-                tuple.Doc = patchResult.ModifiedDocument;
+                try
+                {
+                    patchResult = ExecuteOnDocument(context, item.DocId, expectedChangeVector: null, runner, runIfMissing: null);
+                }
+                catch (Exception e)
+                {
+                    // do not update metadata hash, log error, raise alert
+
+                    tuple.Hashes.Remove(item.ContextOutput.AiHash);
+
+                    var msg = $"Failed to apply update script for context in document '{item.DocId}'. " +
+                              $"Context was: {item.ContextOutput.Context}{Environment.NewLine}" +
+                              $"Error: {e.Message}";
+
+                    _statistics.RecordPartialLoadError(msg, item.DocId);
+                    _logger.Log(LogLevel.Warn, msg);
+
+                    continue;
+                }
+
+                tuple.Doc = patchResult?.ModifiedDocument;
                 hashes[item.DocId] = tuple;
             }
         }
@@ -67,11 +97,24 @@ internal sealed class GenAiBatchPatchCommand : PatchDocumentCommandBase
         // update metadata for each doc in same transaction
         foreach (var kvp in hashes)
         {
+            var id = kvp.Key;
             var doc = kvp.Value.Doc;
+            var hashesList = kvp.Value.Hashes;
+
             if (doc == null)
                 continue; // document was deleted?
 
-            UpdateHashesInMetadata(kvp.Key, doc, _taskName, kvp.Value.Hashes, context);
+            try
+            {
+                UpdateHashesInMetadata(id, doc, _taskName, new DynamicJsonArray(hashesList), context);
+            }
+            catch (Exception e)
+            {
+                var msg = $"Failed to update context hash metadata ('{GenAiTask.GenAiHashesMetadataKey}') for document '{id}'. " +
+                          $"Error: {e.Message}";
+                _statistics.RecordPartialLoadError(msg, id);
+                _logger.Log(LogLevel.Warn, msg);
+            }
         }
 
         return _items.Count;
