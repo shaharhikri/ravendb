@@ -9,13 +9,13 @@ import IconName from "typings/server/icons";
 import { licenseSelectors } from "./shell/licenseSlice";
 import { Icon } from "./Icon";
 import "./FeatureAvailabilitySummary.scss";
-import { AccordionItemWrapper } from "./AboutView";
 import RichAlert from "components/common/RichAlert";
 import appUrl from "common/appUrl";
-import { HrHeader } from "components/common/HrHeader";
 import OverlayTrigger from "react-bootstrap/OverlayTrigger";
 import Tooltip from "react-bootstrap/Tooltip";
 import PopoverWithHoverWrapper from "./PopoverWithHoverWrapper";
+import useBoolean from "components/hooks/useBoolean";
+import Modal from "components/common/Modal";
 
 export type AvailabilityValue = boolean | number | string;
 
@@ -31,6 +31,7 @@ export interface FeatureAvailabilityData {
     community: FeatureAvailabilityValueData;
     professional?: FeatureAvailabilityValueData;
     enterprise: FeatureAvailabilityValueData;
+    enterpriseAi?: FeatureAvailabilityValueData;
 }
 
 interface FeatureAvailabilitySummaryProps {
@@ -50,11 +51,23 @@ export function FeatureAvailabilitySummary(props: FeatureAvailabilitySummaryProp
         return null;
     }
 
-    const licenseTypes = isCloud ? ["Free", "Production"] : ["Community", "Professional", "Enterprise"];
+    const licenseTypes = isCloud ? ["Free", "Production"] : ["Community", "Professional", "Enterprise", "EnterpriseAi"];
 
     if (currentLicense === "Developer") {
         licenseTypes.push("Developer");
     }
+
+    const getLicenseTypeTitle = (licenseType: string) => {
+        if (licenseType === "Developer") {
+            return "Dev";
+        }
+
+        if (licenseType === "EnterpriseAi") {
+            return "RavenDB AI";
+        }
+
+        return licenseType;
+    };
 
     return (
         <>
@@ -93,11 +106,12 @@ export function FeatureAvailabilitySummary(props: FeatureAvailabilitySummaryProp
                                                 currentLicense === licenseType ||
                                                 (currentLicense === "None" && licenseType === "Community") ||
                                                 (currentLicense === "Community" && licenseType === "Free") ||
-                                                (currentLicense === "Enterprise" && licenseType === "Production"),
+                                                (currentLicense === "Enterprise" && licenseType === "Production") ||
+                                                (currentLicense === "EnterpriseAi" && licenseType === "Enterprise"),
                                         })}
                                     >
                                         <Icon icon="circle-filled" className="license-dot" />
-                                        {licenseType === "Developer" ? <span>Dev</span> : licenseType}
+                                        {getLicenseTypeTitle(licenseType)}
                                         {licenseType === "Developer" && (
                                             <PopoverWithHoverWrapper
                                                 message={
@@ -176,6 +190,13 @@ export function FeatureAvailabilitySummary(props: FeatureAvailabilitySummaryProp
                                 >
                                     {formatAvailabilityValue(data.enterprise, isCloud)}
                                 </td>
+                                <td
+                                    className={classNames("enterprise-ai", {
+                                        "current bg-faded-primary": currentLicense === "EnterpriseAi",
+                                    })}
+                                >
+                                    {formatAvailabilityValue(data.enterpriseAi, isCloud)}
+                                </td>
                                 {currentLicense === "Developer" && (
                                     <td
                                         className={classNames("developer", {
@@ -234,8 +255,6 @@ export function FeatureAvailabilitySummary(props: FeatureAvailabilitySummaryProp
                     </a>
                 </div>
             )}
-            {currentLicense !== "Enterprise" && currentLicense !== "None" && <UpgradeLinkSection />}
-            {currentLicense !== "Enterprise" && currentLicense !== "Developer" && <DeveloperLicenseSection />}
         </>
     );
 }
@@ -295,48 +314,24 @@ function formatAvailabilityValue(data: FeatureAvailabilityValueData, canBeEnable
     );
 }
 
-function UpgradeLinkSection() {
+function UpgradeLinkButton() {
     const isCloud = useAppSelector(licenseSelectors.statusValue("IsCloud"));
     const cloudPricingLink = "https://cloud.ravendb.net/pricing";
 
-    return (
-        <div className="mt-4">
-            {isCloud ? (
-                <div className="vstack gap-2 justify-content-center align-items-center">
-                    Explore the options for upgrading your instance
-                    <a href={cloudPricingLink} target="_blank" className="btn btn-cloud rounded-pill">
-                        <Icon icon="cloud" />
-                        Cloud pricing
-                    </a>
-                </div>
-            ) : (
-                <div className="vstack gap-2 justify-content-center align-items-center">
-                    Find out which license suits you best
-                    <a href={appUrl.forAbout()} className="btn btn-primary rounded-pill">
-                        <Icon icon="license" />
-                        See full comparison
-                    </a>
-                </div>
-            )}
-        </div>
-    );
-}
+    if (isCloud) {
+        return (
+            <a href={cloudPricingLink} target="_blank" className="btn btn-cloud rounded-pill">
+                <Icon icon="cloud" />
+                Cloud pricing
+            </a>
+        );
+    }
 
-function DeveloperLicenseSection() {
-    const developerLicenseLink = useRavenLink({ hash: "ZOVGRA", isDocs: false });
     return (
-        <>
-            <HrHeader margin="mt-5 mb-2">
-                <Icon icon="console" />
-                Are you developing?
-            </HrHeader>
-            <span className="text-muted">
-                You may test this and many more features using free{" "}
-                <a href={developerLicenseLink} target="_blank" className="text-developer">
-                    Developer license <Icon icon="newtab" margin="m-0" />
-                </a>
-            </span>
-        </>
+        <a href={appUrl.forAbout()} className="btn btn-primary rounded-pill">
+            <Icon icon="license" />
+            See full comparison
+        </a>
     );
 }
 
@@ -344,16 +339,67 @@ export default function FeatureAvailabilitySummaryWrapper({
     isUnlimited,
     data,
 }: FeatureAvailabilitySummaryProps & { isUnlimited: boolean }) {
+    const { value: isOpen, toggle: toggleIsOpen } = useBoolean(false);
+
     return (
-        <AccordionItemWrapper
-            icon="license"
-            color={isUnlimited ? "success" : "warning"}
-            heading="Licensing"
-            description="See which plans offer this and more exciting features"
-            targetId="licensing"
-            className={isUnlimited ? null : "license-limited"}
-        >
-            <FeatureAvailabilitySummary data={data} />
-        </AccordionItemWrapper>
+        <>
+            <div
+                className={classNames("license-accordion panel-bg-1 accordion-item", {
+                    "license-limited": !isUnlimited,
+                })}
+                onClick={toggleIsOpen}
+            >
+                <h2 className="accordion-header">
+                    <button type="button" aria-expanded="true" className="accordion-button new-tab-button">
+                        <i className="icon-license text-success me-1 tab-icon me-3 icon-md"></i>
+                        <div className="vstack gap-1">
+                            <div className="hstack flex-wrap gap-1">
+                                <h4 className="m-0">Licensing</h4>
+                            </div>
+                            <small className="description">See which plans offer this and more exciting features</small>
+                        </div>
+                    </button>
+                </h2>
+            </div>
+            {isOpen && <FeatureAvailabilitySummaryModal data={data} toggleIsOpen={toggleIsOpen} />}
+        </>
+    );
+}
+
+function FeatureAvailabilitySummaryModal({
+    data,
+    toggleIsOpen,
+}: FeatureAvailabilitySummaryProps & { toggleIsOpen: () => void }) {
+    const licenseType = useAppSelector(licenseSelectors.licenseType);
+
+    return (
+        <Modal size="lg" show onHide={toggleIsOpen} contentClassName="modal-border bulge-primary">
+            <Modal.Header closeButton onCloseClick={toggleIsOpen}>
+                <h3>
+                    <Icon icon="license" />
+                    License comparison
+                </h3>
+                {licenseType !== "Developer" && licenseType !== "EnterpriseAi" && (
+                    <>
+                        <br />
+                        <div>
+                            If you are developing you can test this and many more features using free{" "}
+                            <a href="TODO kalczur" className="text-developer">
+                                Developer license <Icon icon="newtab" margin="m-0" />
+                            </a>
+                        </div>
+                    </>
+                )}
+            </Modal.Header>
+            <Modal.Body>
+                <FeatureAvailabilitySummary data={data} />
+            </Modal.Body>
+            <Modal.Footer className="hstack gap-2 justify-content-end">
+                <Button variant="link" onClick={toggleIsOpen} className="link-muted">
+                    Close
+                </Button>
+                {licenseType !== "EnterpriseAi" && licenseType !== "None" && <UpgradeLinkButton />}
+            </Modal.Footer>
+        </Modal>
     );
 }
