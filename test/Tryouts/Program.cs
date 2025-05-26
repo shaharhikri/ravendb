@@ -32,6 +32,7 @@ using Raven.Client.Documents.Operations.AI;
 using Newtonsoft.Json.Schema;
 using Raven.Server.Documents.AI.AiGen;
 using Raven.Server.Documents.AI;
+using SlowTests.Server.Documents.AI.GenAi;
 
 namespace Tryouts;
 
@@ -55,11 +56,11 @@ public static class Program
             try
             {
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new ChatCompletionClientTests(testOutputHelper))
+                using (var test = new GenAiBasics(testOutputHelper))
                 {
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
-                    var p = GetGenAiConfig(RavenAiIntegration.OpenAi);
-                    await test.OtherErrors(p.Options, p.Configuration);
+                    var p = GetGenAiConfig(RavenAiIntegration.Ollama);
+                    test.CanProcessDocuments(p.Options, p.Configuration);
                 }
             }
             catch (Exception e)
