@@ -12,6 +12,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Raven.Client.Documents.AI;
 using Raven.Client.Documents.BulkInsert;
 using Raven.Client.Documents.Changes;
 using Raven.Client.Documents.Conventions;
@@ -43,6 +44,8 @@ namespace Raven.Client.Documents
         private OperationExecutor _operationExecutor;
 
         private DatabaseSmuggler _smuggler;
+
+        private DatabaseAI _ai;
 
         private string _identifier;
 
@@ -504,6 +507,8 @@ namespace Raven.Client.Documents
         public override event EventHandler BeforeDispose;
 
         public override DatabaseSmuggler Smuggler => _smuggler ??= new DatabaseSmuggler(this);
+
+        public override DatabaseAI AI => _ai ??= new DatabaseAI(this);
 
         public override MaintenanceOperationExecutor Maintenance
         {

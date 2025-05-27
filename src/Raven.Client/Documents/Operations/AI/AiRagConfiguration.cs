@@ -12,6 +12,7 @@ public class AiRagConfiguration
     public List<ToolQuery> Queries { get; set; }= [];
     public List<ToolAction> Actions { get; set; } = [];
     public PersistenceConfiguration Persistence { get; set; }
+    public Dictionary<string, string> Parameters { get; set; }
 
     public class PersistenceConfiguration
     {
