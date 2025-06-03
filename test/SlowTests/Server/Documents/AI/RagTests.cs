@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
+using Amazon.Runtime.Internal.UserAgent;
 using FastTests;
 using Raven.Client.Documents;
 using Raven.Client.Documents.Conventions;
@@ -16,6 +19,7 @@ using Raven.Client.Util;
 using Raven.Server.Documents.AI.AiGen;
 using Sparrow.Json;
 using Tests.Infrastructure;
+using Xunit;
 using Xunit.Abstractions;
 
 namespace SlowTests.Server.Documents.AI;
@@ -23,7 +27,7 @@ namespace SlowTests.Server.Documents.AI;
 public class RagTests : RavenTestBase
 {
 
-    private static string s_openAiApiKey = File.ReadAllText(@"C:\Users\Shahar Hikri\Desktop\GenAi\openAiApiKey.txt");
+    private static string s_openAiApiKey = Environment.GetEnvironmentVariable("RAVEN_AI_INTEGRATION_OPENAI_API_KEY");
 
     private static string name = AbstractChatCompletionClient.GetAllowedUniqueName(DateTime.UtcNow.ToString());
 
@@ -54,9 +58,9 @@ public class RagTests : RavenTestBase
     }
 
     [RavenFact(RavenTestCategory.Ai)]
-    public async Task RagClient(Options options)
+    public async Task RagClient()
     {
-        using DocumentStore store = GetDocumentStore(options);
+        using DocumentStore store = GetDocumentStore();
 
         var connectionString = new AiConnectionString()
         {
@@ -151,6 +155,103 @@ public class RagTests : RavenTestBase
         // WaitForUserToContinueTheTest(store, false);
     }
 
+    [RavenTheory(RavenTestCategory.Ai)]
+    [RavenData(DatabaseMode = RavenDatabaseMode.All,SearchEngineMode = RavenSearchEngineMode.All)]
+    public async Task RagConfig(Options options)
+    {
+        using DocumentStore store = GetDocumentStore(options);
+
+        var connectionString1 = new AiConnectionString()
+        {
+            Name = "openai_connection_1",
+            OpenAiSettings = new OpenAiSettings()
+            {
+                ApiKey = s_openAiApiKey,
+                Model = "gpt-4o",
+                Endpoint = "https://api.openai.com/v1"
+            }
+        };
+
+        var connectionString2 = new AiConnectionString()
+        {
+            Name = "openai_connection_2",
+            OpenAiSettings = new OpenAiSettings()
+            {
+                ApiKey = s_openAiApiKey,
+                Model = "gpt-4o-mini",
+                Endpoint = "https://api.openai.com/v1"
+            }
+        };
+
+        store.Maintenance.Send(new PutConnectionStringOperation<AiConnectionString>(connectionString1));
+        store.Maintenance.Send(new PutConnectionStringOperation<AiConnectionString>(connectionString2));
+
+        var config1 = new AiRagConfiguration
+        {
+            ConnectionStringName = "openai_connection_1",
+            SystemPrompt = "You are an AI agent of an online shop",
+            OutputSchema = "{\"Answer\": \"Answer to the user question\", \"Relevant\": true, \"RelevantOrdersId\": [\"The order ids relevant to the query or response\"], \"MatchinProductsId\": [\"All the product ids referenced either by the user or the system\"] }",
+            // Parameters = parameters,
+            Persistence = new AiRagConfiguration.PersistenceConfiguration
+            {
+                Collection = "Chats",
+                Expires = TimeSpan.FromHours(3)
+            },
+            Queries = new List<AiRagConfiguration.ToolQuery>
+            {
+                new AiRagConfiguration.ToolQuery
+                {
+                    Name = "ProductSearch",
+                    Description = "semantic search the store product catalog",
+                    Query = "from Products where vector.search(embedding.text(Name), $query)",
+                    ParametersSchema = "{ \"query\": [\"term or phrase to search in the catalog\"] }"
+                },
+                new AiRagConfiguration.ToolQuery
+                {
+                    Name = "RecentOrder",
+                    Description = "Get the recent orders of the current user",
+                    Query = "from Orders where Company = $company order by OrderedAt desc limit 10",
+                    ParametersSchema = "{}"
+                }
+            },
+            Parameters = new Dictionary<string, string>()
+            {
+                {"User", "Users/1A"},
+                {"Company", "RavenDB"},
+                {"Country", null},
+            }
+        };
+
+        var config2 = new AiRagConfiguration
+        {
+            ConnectionStringName = "openai_connection_2",
+            SystemPrompt = "You are a UI/UX designer",
+            OutputSchema = "{\"Answer\": \"Answer to the user question\"}",
+        };
+
+        var config3 = new AiRagConfiguration
+        {
+            ConnectionStringName = "openai_connection_1",
+            SystemPrompt = "You are a nurse.",
+            OutputSchema = "{\"Answer\": \"Answer to the user question\"}",
+        };
+
+        var agent1 = await store.Maintenance.SendAsync(new ConfigureAiRagOperation(config1));
+        var agent2 = await store.Maintenance.SendAsync(new ConfigureAiRagOperation("agent2", config2));
+        var agent3 = await store.Maintenance.SendAsync(new ConfigureAiRagOperation(config3));
+
+        Assert.Equal("agent2", agent2.AgentId);
+
+        var res1 = await store.Maintenance.SendAsync(new GetAiRagConfigurationOperation(agent1.AgentId));
+        var res2 = await store.Maintenance.SendAsync(new GetAiRagConfigurationOperation(agent2.AgentId));
+        var res3 = await store.Maintenance.SendAsync(new GetAiRagConfigurationOperation(agent3.AgentId));
+
+        Assert.True(res1.Equals(config1));
+        Assert.True(res2.Equals(config2));
+        Assert.True(res3.Equals(config3));
+
+        WaitForUserToContinueTheTest(store, false);
+    }
 
     private class User
     {

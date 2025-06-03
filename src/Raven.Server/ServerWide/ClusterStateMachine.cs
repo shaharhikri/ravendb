@@ -500,6 +500,7 @@ namespace Raven.Server.ServerWide
                     case nameof(DeletePrefixedShardingSettingCommand):
                     case nameof(UpdatePrefixedShardingSettingCommand):
                     case nameof(RevisionsBinConfigurationCommand):
+                    case nameof(AiRagConfigurationCommand):
                         UpdateDatabase(context, type, cmd, index, serverStore);
                         break;
 
@@ -2851,6 +2852,7 @@ namespace Raven.Server.ServerWide
                 case nameof(SourceMigrationSendCompletedCommand):
                 case nameof(DestinationMigrationConfirmCommand):
                 case nameof(SourceMigrationCleanupCommand):
+                case nameof(AiRagConfigurationCommand):
                     databaseRecord.EtagForBackup = index;
                     break;
             }

@@ -195,6 +195,8 @@ namespace Raven.Client.Json.Serialization
 
         internal static readonly Func<BlittableJsonReaderObject, ConfigureRevisionsBinCleanerOperationResult> ConfigureRevisionsBinCleanerOperationResult = GenerateJsonDeserializationRoutine<ConfigureRevisionsBinCleanerOperationResult>();
         
+        internal static readonly Func<BlittableJsonReaderObject, ConfigureAiRagOperationResult> ConfigureAiRagOperationResult = GenerateJsonDeserializationRoutine<ConfigureAiRagOperationResult>();
+        
         internal static readonly Func<BlittableJsonReaderObject, ConfigureDataArchivalOperationResult> ConfigureDataArchivalOperationResult = GenerateJsonDeserializationRoutine<ConfigureDataArchivalOperationResult>();
 
         internal static readonly Func<BlittableJsonReaderObject, DocumentCompressionConfigurationResult> DocumentCompressionConfigurationOperationResult = GenerateJsonDeserializationRoutine<DocumentCompressionConfigurationResult>();

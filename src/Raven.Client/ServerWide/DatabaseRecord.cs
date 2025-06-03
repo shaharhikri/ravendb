@@ -93,6 +93,8 @@ namespace Raven.Client.ServerWide
 
         public RevisionsBinConfiguration RevisionsBin;
 
+        public Dictionary<string, AiRagConfiguration> AiRagConfigurations;
+
         public TimeSeriesConfiguration TimeSeries;
 
         public RevisionsCollectionConfiguration RevisionsForConflicts;

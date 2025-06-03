@@ -205,7 +205,7 @@ namespace Raven.Server.ServerWide
             
             [nameof(AddGenAiCommand)] = 70_002,
             [nameof(UpdateGenAiCommand)] = 70_002,
-
+            [nameof(AiRagConfigurationCommand)] = 70_002,
         };
 
         public bool CanPutCommand(string command)

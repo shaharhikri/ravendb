@@ -11,12 +11,15 @@ namespace Raven.Server.Web
 {
     public abstract partial class RequestHandler
     {
-        public void LogTaskToAudit(string description, long id, BlittableJsonReaderObject configuration)
+        public void LogTaskToAudit(string description, long id, BlittableJsonReaderObject configuration, string additionalInfo = null)
         {
             if (RavenLogManager.Instance.IsAuditEnabled)
             {
                 DynamicJsonValue conf = GetCustomConfigurationAuditJson(description, configuration);
                 var line = $"'{description}' with taskId: '{id}'";
+                if (additionalInfo != null)
+                    line += $" Additional info: '{additionalInfo}'";
+                
 
                 if (conf != null)
                 {

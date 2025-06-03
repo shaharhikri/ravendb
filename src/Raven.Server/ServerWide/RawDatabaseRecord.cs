@@ -484,6 +484,37 @@ namespace Raven.Server.ServerWide
             }
         }
 
+        private Dictionary<string, AiRagConfiguration> _aiRagConfigurations;
+
+        public Dictionary<string, AiRagConfiguration> AiRagConfigurations
+        {
+            get
+            {
+                if (_materializedRecord != null)
+                    return _materializedRecord.AiRagConfigurations;
+
+                if (_aiRagConfigurations == null)
+                {
+                    if (_record.TryGet(nameof(DatabaseRecord.AiRagConfigurations), out BlittableJsonReaderObject obj) && obj != null)
+                    {
+                        _aiRagConfigurations = new Dictionary<string, AiRagConfiguration>();
+                        var propertyDetails = new BlittableJsonReaderObject.PropertyDetails();
+                        for (var i = 0; i < obj.Count; i++)
+                        {
+                            obj.GetPropertyByIndex(i, ref propertyDetails);
+
+                            if (propertyDetails.Value == null)
+                                continue;
+
+                            if (propertyDetails.Value is BlittableJsonReaderObject bjro)
+                                _aiRagConfigurations[propertyDetails.Name] = JsonDeserializationCluster.AiRagConfiguration(bjro);
+                        }
+                    }
+                }
+                return _aiRagConfigurations;
+            }
+        }
+
         private DocumentsCompressionConfiguration _documentsCompressionConfiguration;
 
         public DocumentsCompressionConfiguration DocumentsCompressionConfiguration

@@ -72,6 +72,8 @@ namespace Raven.Server.ServerWide
 
         public static readonly Func<BlittableJsonReaderObject, RevisionsBinConfiguration> RevisionsBinConfiguration = GenerateJsonDeserializationRoutine<RevisionsBinConfiguration>();
 
+        public static readonly Func<BlittableJsonReaderObject, AiRagConfiguration> AiRagConfiguration = GenerateJsonDeserializationRoutine<AiRagConfiguration>();
+
         public static readonly Func<BlittableJsonReaderObject, RefreshConfiguration> RefreshConfiguration = GenerateJsonDeserializationRoutine<RefreshConfiguration>();
         
         public static readonly Func<BlittableJsonReaderObject, DataArchivalConfiguration> DataArchivalConfiguration = GenerateJsonDeserializationRoutine<DataArchivalConfiguration>();
@@ -313,7 +315,8 @@ namespace Raven.Server.ServerWide
             [nameof(AddPrefixedShardingSettingCommand)] = GenerateJsonDeserializationRoutine<AddPrefixedShardingSettingCommand>(),
             [nameof(DeletePrefixedShardingSettingCommand)] = GenerateJsonDeserializationRoutine<DeletePrefixedShardingSettingCommand>(),
             [nameof(UpdatePrefixedShardingSettingCommand)] = GenerateJsonDeserializationRoutine<UpdatePrefixedShardingSettingCommand>(),
-            [nameof(RevisionsBinConfigurationCommand)] = GenerateJsonDeserializationRoutine<RevisionsBinConfigurationCommand>()
+            [nameof(RevisionsBinConfigurationCommand)] = GenerateJsonDeserializationRoutine<RevisionsBinConfigurationCommand>(),
+            [nameof(AiRagConfigurationCommand)] = GenerateJsonDeserializationRoutine<AiRagConfigurationCommand>()
         };
     }
 }

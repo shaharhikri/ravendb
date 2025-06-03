@@ -19,7 +19,7 @@ public class DatabaseAI
         _store = store;
     }
 
-    public async Task<long> CreateAgentAsync(AiRagConfiguration aiRagConfiguration)
+    public async Task<string> CreateAgentAsync(AiRagConfiguration aiRagConfiguration)
     {
         // Send aiRagConfiguration to server
         // the server will create 'agentId1234'
@@ -32,10 +32,27 @@ public class DatabaseAI
         //         "agentId1234" : aiRagConfiguration value
         //     }
         // }
-        throw new NotImplementedException();
+        var result = await _store.Maintenance.ForDatabase(_databaseName).SendAsync(new ConfigureAiRagOperation(aiRagConfiguration)).ConfigureAwait(false);
+        return result.AgentId;
     }
 
-    public async Task<RagAiResponse> StartChatAsync(long agentId, string prompt, Func<RagAiBuilder, RagAiBuilder> func)
+    public string CreateAgent(AiRagConfiguration aiRagConfiguration)
+    {
+        // Send aiRagConfiguration to server
+        // the server will create 'agentId1234'
+        // it will save it in db record under AiAgents, like that:
+        // record:
+        // {
+        //     ...,
+        //     "AiAgents":
+        //     {
+        //         "agentId1234" : aiRagConfiguration value
+        //     }
+        // }
+        return _store.Maintenance.ForDatabase(_databaseName).Send(new ConfigureAiRagOperation(aiRagConfiguration)).AgentId;
+    }
+
+    public async Task<RagAiResponse> StartChatAsync(string agentId, string prompt, Func<RagAiBuilder, RagAiBuilder> func)
     {
         var builder = func.Invoke(new RagAiBuilder());
         var parameters = builder.GetParameters();
@@ -46,22 +63,17 @@ public class DatabaseAI
         throw new NotImplementedException();
     }
 
-    public async Task<RagAiResponse> ContinueChatAsync(long responseChatId, IEnumerable<string> answers)
+    public RagAiResponse StartChat(string agentId, string prompt, Func<RagAiBuilder, RagAiBuilder> func)
     {
         throw new NotImplementedException();
     }
 
-    public long CreateAgent(AiRagConfiguration aiRagConfiguration)
+    public async Task<RagAiResponse> ContinueChatAsync(string responseChatId, IEnumerable<string> answers)
     {
         throw new NotImplementedException();
     }
 
-    public RagAiResponse StartChat(long agentId, string prompt, Func<RagAiBuilder, RagAiBuilder> func)
-    {
-        throw new NotImplementedException();
-    }
-
-    public RagAiResponse ContinueChat(long responseChatId, IEnumerable<string> answers)
+    public RagAiResponse ContinueChat(string responseChatId, IEnumerable<string> answers)
     {
         throw new NotImplementedException();
     }
@@ -81,7 +93,7 @@ public class DatabaseAI
 
     public class RagAiResponse
     { 
-        public long ChatId { get; set; } // ConversationId
+        public string ChatId { get; set; } // ConversationId
         public string ResponseType { get; set; }
         public AiRagConfiguration.ToolAction[] Actions { get; set; }
         public string Answer { get; set; }

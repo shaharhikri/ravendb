@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Raven.Client.Documents.Indexes;
 using Raven.Client.Documents.Indexes.Analysis;
+using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.Backups;
 using Raven.Client.Documents.Operations.Configuration;
 using Raven.Client.Documents.Operations.Expiration;
@@ -116,6 +117,16 @@ public class RavenDB_19938 : RavenTestBase
         );
 
         Assert.Equal(5, record.RevisionsBin.MinimumEntriesAgeToKeepInMin);
+
+        record = CreateDatabaseRecord(builder => builder
+            .Regular("DB1")
+            .ConfigureAiRag(new Dictionary<string, AiRagConfiguration>()
+            {
+                {"1", null }, {"2", null }, {"3", null }
+            })
+        );
+
+        Assert.Equal(3, record.AiRagConfigurations.Count);
 
         record = CreateDatabaseRecord(builder => builder
             .Regular("DB1")

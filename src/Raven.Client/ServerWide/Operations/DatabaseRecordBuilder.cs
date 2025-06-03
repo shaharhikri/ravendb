@@ -400,6 +400,12 @@ public sealed class DatabaseRecordBuilder :
         return this;
     }
 
+    IDatabaseRecordBuilderBase IDatabaseRecordBuilderBase.ConfigureAiRag(Dictionary<string, AiRagConfiguration> configurations)
+    {
+        _databaseRecord.AiRagConfigurations = configurations ?? throw new ArgumentNullException(nameof(configurations));
+        return this;
+    }
+
     IDatabaseRecordBuilderBase IDatabaseRecordBuilderBase.WithEtls(Action<IEtlConfigurationBuilder> builder)
     {
         if (builder == null)
@@ -640,6 +646,8 @@ public interface IDatabaseRecordBuilderBase
     IDatabaseRecordBuilderBase ConfigureRevisions(RevisionsConfiguration configuration);
 
     IDatabaseRecordBuilderBase ConfigureRevisionsBin(RevisionsBinConfiguration configuration);
+
+    IDatabaseRecordBuilderBase ConfigureAiRag(Dictionary<string, AiRagConfiguration> configurations);
 
     IDatabaseRecordBuilderBase WithEtls(Action<IEtlConfigurationBuilder> builder);
 

@@ -835,13 +835,17 @@ namespace Raven.Server.Web
         public const string ReadRevisionsConfigTag = "read-revisions-config";
         public const string ConflictedRevisionsConfigTag = "conflicted-revisions-config";
         public const string RevisionsBinConfigTag = "revisions-bin-config";
+        public const string AiRagConfigTag = "ai-rag-config";
 
         private static DynamicJsonValue GetCustomConfigurationAuditJson(string name, BlittableJsonReaderObject configuration)
         {
             switch (name)
             {
-                case RevisionsBinConfigTag:
+                case AiRagConfigTag:
                     return JsonDeserializationCluster.RevisionsBinConfiguration(configuration).ToAuditJson();
+
+                case RevisionsBinConfigTag:
+                    return JsonDeserializationCluster.AiRagConfiguration(configuration).ToAuditJson();
                 
                 case ReadRevisionsConfigTag:
                     return JsonDeserializationServer.RevisionsConfiguration(configuration).ToAuditJson();
