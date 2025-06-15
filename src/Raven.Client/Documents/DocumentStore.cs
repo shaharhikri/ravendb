@@ -12,6 +12,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Raven.Client.Documents.AI;
 using Raven.Client.Documents.BulkInsert;
 using Raven.Client.Documents.Changes;
 using Raven.Client.Documents.Conventions;
@@ -43,6 +44,8 @@ namespace Raven.Client.Documents
         private OperationExecutor _operationExecutor;
 
         private DatabaseSmuggler _smuggler;
+
+        private DatabaseAiAgents _aiAgents;
 
         private string _identifier;
 
@@ -219,6 +222,8 @@ namespace Raven.Client.Documents
 
             return lazy.Value;
         }
+
+        public override DatabaseAiAgents AiAgents => _aiAgents ??= new DatabaseAiAgents(this);
 
         public override IDisposable SetRequestTimeout(TimeSpan timeout, string database = null)
         {

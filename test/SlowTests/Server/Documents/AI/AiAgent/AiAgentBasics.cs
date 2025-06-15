@@ -35,6 +35,62 @@ namespace SlowTests.Server.Documents.AI.AiAgent
 
         [RavenTheory(RavenTestCategory.Ai)]
         [RavenGenAiData(IntegrationType = RavenAiIntegration.OpenAi, DatabaseMode = RavenDatabaseMode.Single, CheckCanConnect = false, NightlyBuildRequired = false)]
+        public async Task AiAgentClientAndResumeBasicTest(Options options, GenAiConfiguration config)
+        {
+            using var store = GetDocumentStore(options);
+            await store.Maintenance.SendAsync(new CreateSampleDataOperation());
+
+            await store.Maintenance.SendAsync(new PutConnectionStringOperation<AiConnectionString>(config.Connection));
+
+            using var session = store.OpenAsyncSession();
+
+            var agent = new AiAgentConfiguration(config.ConnectionStringName,
+                "You are an AI agent of an online shop, helping customers answer queries about that topic only. When talking about orders or products, include the ids as well.");
+
+            agent.Persistence = new AiAgentConfiguration.PersistenceConfiguration
+            {
+                Collection = "Chats",
+                Expires = TimeSpan.FromDays(30)
+            };
+
+            agent.Queries =
+            [
+                AiAgentConfiguration.ToolQuery.Build(
+                    "ProductSearch",
+                    "semantic search the store product catalog",
+                    session.Query<Product>().VectorSearch(v => v.WithText(p => p.Name), v => v.ByText("$query")))
+                ,
+                AiAgentConfiguration.ToolQuery.Build(
+                    "RecentOrder",
+                    "Get the recent orders of the current user",
+                    session.Query<Query.Order>().Where(o => o.Company == "$company").OrderByDescending(o => o.OrderedAt).Take(10))
+            ];
+
+            await store.AiAgents.CreateAgentAsync<OutputSchema>("shopping assistant", agent);
+
+            var r = await store.AiAgents.StartChatAsync<OutputSchema>("shopping assistant", "what goes well with my cheese?", 
+                p => p.AddParameter("company", "companies/90-A"));
+
+            Assert.NotNull(r.Response.Answer);
+            Assert.NotNull(r.Usage);
+            Assert.NotNull(r.ChatId);
+
+            var chat = await session.LoadAsync<dynamic>(r.ChatId);
+            Assert.NotNull(chat);
+
+            var r1 = await store.AiAgents.ContinueChatAsync<OutputSchema>(r.ChatId, "what goes well with my cheese?",
+                p => p.AddParameter("company", "companies/90-A"));
+            
+            Assert.False(string.IsNullOrEmpty(r1.Response.Answer));
+
+            var r2 = await store.AiAgents.ContinueChatAsync<OutputSchema>(r.ChatId, "what cheese goes well with italian food?",
+                p => p.AddParameter("company", "companies/90-A"));
+
+            Assert.False(string.IsNullOrEmpty(r2.Response.Answer));
+        }
+
+        [RavenTheory(RavenTestCategory.Ai)]
+        [RavenGenAiData(IntegrationType = RavenAiIntegration.OpenAi, DatabaseMode = RavenDatabaseMode.Single, CheckCanConnect = false, NightlyBuildRequired = false)]
         public async Task CanCreateAiAgent(Options options, GenAiConfiguration config)
         {
             using var store = GetDocumentStore(options);

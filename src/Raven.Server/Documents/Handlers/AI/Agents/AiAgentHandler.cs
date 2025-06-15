@@ -1,8 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
+using Raven.Client.Documents.Commands;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Client.Documents.Operations.AI.Agents;
 using Raven.Client.Exceptions;
@@ -58,7 +60,7 @@ public class AiAgentHandler : DatabaseRequestHandler
 
         using var _ = ContextPool.AllocateOperationContext(out JsonOperationContext context);
         var body = await ReadBodyAsync(context, token.Token);
-        var r = await Talk(context, configuration, body.UserPrompt, body.Parameter, token: token);
+        var r = await TalkAsync(context, configuration, body.UserPrompt, body.Parameter, token: token);
 
         string conversationId = null;
         if (configuration.Persistence is not null)
@@ -87,8 +89,70 @@ public class AiAgentHandler : DatabaseRequestHandler
     public async Task ResumeChat()
     {
         using var token = CreateHttpRequestBoundOperationToken();
-        var chatId = GetStringQueryString("chatId", required: true);
-        throw new NotImplementedException();
+        var chatId = GetStringQueryString("chat", required: true);
+
+        using var _ = ContextPool.AllocateOperationContext(out JsonOperationContext context);
+        var body = await ReadBodyAsync(context, token.Token);
+
+        var chat = await GetChatAsync(context, chatId);
+        if (chat == null)
+        {
+            throw new ArgumentException($"There is no chat with id \"{chatId}\"");
+        }
+
+        if (chat.TryGet("Agent", out BlittableJsonReaderObject options) == false)
+            throw new FormatException($"Chat format of \"{chatId}\" isn't valid - cannot find \"Agent\" in it");
+
+        var cfg = JsonDeserializationClient.AiAgentConfiguration(options);
+
+        if (chat.TryGet("Messages", out BlittableJsonReaderArray oldMsgs) == false)
+            throw new FormatException($"Chat format of \"{chatId}\" isn't valid - cannot find \"Messages\" in it");
+
+        var r = await TalkAsync(context, cfg, body.Parameter, GetMessages(), token: token);
+
+        MergedPutCommand putCmd = new(r.Dcoument, chatId, null, Database);
+        await Database.TxMerger.Enqueue(putCmd);
+        var conversationId = putCmd.PutResult.Id;
+
+        await using var writer = new AsyncBlittableJsonTextWriter(context, ResponseBodyStream());
+        writer.WriteStartObject();
+        writer.WritePropertyName("Response");
+        writer.WriteObject(r.Response.Result);
+        writer.WriteComma();
+        writer.WritePropertyName("Usage");
+        r.Usage.Write(writer);
+        writer.WriteComma();
+        writer.WritePropertyName("ChatId");
+        writer.WriteString(conversationId);
+        writer.WriteEndObject();
+
+        List<BlittableJsonReaderObject> GetMessages()
+        {
+            var msgs = new List<BlittableJsonReaderObject>();
+
+            if (oldMsgs?.Length > 0)
+            {
+                foreach (BlittableJsonReaderObject message in oldMsgs)
+                {
+                    msgs.Add(message);
+                }
+            }
+            else
+            {
+                msgs.Add(context.ReadObject(new DynamicJsonValue
+                {
+                    ["role"] = "system", 
+                    ["content"] = cfg.SystemPrompt
+                }, "system/msg"));
+            }
+
+            msgs.Add(context.ReadObject(new DynamicJsonValue
+            {
+                ["role"] = "user",
+                ["content"] = body.UserPrompt
+            }, "user/msg"));
+            return msgs;
+        }
     }
 
     [RavenAction("/databases/*/admin/ai/agent", "GET", AuthorizationStatus.DatabaseAdmin)]
@@ -150,7 +214,7 @@ public class AiAgentHandler : DatabaseRequestHandler
         var cfg = JsonDeserializationClient.AiAgentConfiguration(options);
 
         var body = await ReadBodyAsync(context, token.Token);
-        var r = await Talk(context, cfg, body.UserPrompt, body.Parameter, token);
+        var r = await TalkAsync(context, cfg, body.UserPrompt, body.Parameter, token);
 
         await using var writer = new AsyncBlittableJsonTextWriter(context, ResponseBodyStream());
         writer.WriteStartObject();
@@ -171,15 +235,23 @@ public class AiAgentHandler : DatabaseRequestHandler
         return (parameters, userPrompt);
     }
 
-    private async Task<(AiUsage Usage, AiResponse Response, BlittableJsonReaderObject Dcoument)> Talk(JsonOperationContext context, AiAgentConfiguration cfg,
+    public async Task<BlittableJsonReaderObject> GetChatAsync(JsonOperationContext context, string chatId)
+    {
+        var cmd = new GetDocumentsCommand(Database.RequestExecutor.Conventions, chatId, includes: null, metadataOnly: false);
+
+        await Database.RequestExecutor.ExecuteAsync(cmd, context);
+
+        if (cmd?.Result?.Results?.Length > 0)
+        {
+            return (BlittableJsonReaderObject)cmd.Result.Results.FirstOrDefault();
+        }
+
+        return null;
+    }
+
+    private Task<(AiUsage Usage, AiResponse Response, BlittableJsonReaderObject Dcoument)> TalkAsync(JsonOperationContext context, AiAgentConfiguration cfg,
         string userPrompt, BlittableJsonReaderObject parameters, OperationCancelToken token)
     {
-        var conStr = GetAiConnectionString(cfg.ConnectionStringName);
-
-        string schemaOrSampleObject = cfg.OutputSchema ?? throw new InvalidOperationException("Missing output schema in configuration");
-        string schema = ChatCompletionClient.GetSchemaFor(schemaOrSampleObject);
-        using var client = ChatCompletionClient.CreateChatCompletionClient(Database.ServerStore.ContextPool, conStr, schema);
-
         List<BlittableJsonReaderObject> msgs =
         [
             context.ReadObject(new DynamicJsonValue
@@ -193,6 +265,19 @@ public class AiAgentHandler : DatabaseRequestHandler
                 ["content"] = userPrompt
             }, "user/msg"),
         ];
+
+        return TalkAsync(context, cfg, parameters, msgs, token);
+    }
+
+    private async Task<(AiUsage Usage, AiResponse Response, BlittableJsonReaderObject Dcoument)> TalkAsync(JsonOperationContext context, AiAgentConfiguration cfg,
+         BlittableJsonReaderObject parameters, List<BlittableJsonReaderObject> msgs, OperationCancelToken token)
+    {
+        var conStr = GetAiConnectionString(cfg.ConnectionStringName);
+
+        string schemaOrSampleObject = cfg.OutputSchema ?? throw new InvalidOperationException("Missing output schema in configuration");
+        string schema = ChatCompletionClient.GetSchemaFor(schemaOrSampleObject);
+        using var client = ChatCompletionClient.CreateChatCompletionClient(Database.ServerStore.ContextPool, conStr, schema);
+
         var tools = GenerateTools(cfg, context);
 
         AiUsage usage = new();
@@ -241,7 +326,7 @@ public class AiAgentHandler : DatabaseRequestHandler
                     var array = context.ParseBufferToArray(content, "tool-response", BlittableJsonDocumentBuilder.UsageMode.None);
                     msg.Modifications = new DynamicJsonValue(msg)
                     {
-                        ["content"] = array
+                        ["content"] = array.ToString()
                     };
                     break;
                 }
@@ -253,7 +338,7 @@ public class AiAgentHandler : DatabaseRequestHandler
                         var obj = context.Sync.ReadForMemory(content, "assistant-response");
                         msg.Modifications = new DynamicJsonValue(msg)
                         {
-                            ["content"] = obj
+                            ["content"] = obj.ToString()
                         };
                     }
 
@@ -268,7 +353,7 @@ public class AiAgentHandler : DatabaseRequestHandler
                                     var obj = context.Sync.ReadForMemory(args, "tool-arguments");
                                     function.Modifications = new DynamicJsonValue(function)
                                     {
-                                        ["arguments"] = obj
+                                        ["arguments"] = obj.ToString()
                                     };          
                                 }
                             }
