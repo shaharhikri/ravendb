@@ -221,7 +221,8 @@ public class AiAgentHandler : DatabaseRequestHandler
 
         var conStr = GetAiConnectionString(configuration.ConnectionStringName);
 
-        string schemaOrSampleObject = configuration.OutputSchema ?? throw new InvalidOperationException("Missing output schema in configuration");
+        // todo: the '.ToString()' will be removed as part of RavenDB-24457
+        string schemaOrSampleObject = configuration.OutputSchema?.ToString() ?? throw new InvalidOperationException("Missing output schema in configuration");
         string schema = ChatCompletionClient.GetSchemaFor(schemaOrSampleObject);
         using var client = ChatCompletionClient.CreateChatCompletionClient(Database.ServerStore.ContextPool, conStr, schema);
 

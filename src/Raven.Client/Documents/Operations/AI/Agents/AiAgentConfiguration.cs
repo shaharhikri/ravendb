@@ -1,7 +1,6 @@
 ﻿using System;
-using System.Collections;
 using System.Collections.Generic;
-using System.Linq.Expressions;
+using Newtonsoft.Json;
 using Raven.Client.Documents.Linq;
 using Raven.Client.Documents.Session;
 using Raven.Client.Util;
@@ -59,7 +58,8 @@ public class AiAgentConfiguration : IDynamicJson
     /// }
     /// </code>
     /// </summary>
-    public string OutputSchema { get; set; }
+    // [JsonProperty(TypeNameHandling = TypeNameHandling.None)]
+    public object OutputSchema { get; set; }
 
     /// <summary>
     /// Database-side tools: predefined queries that RavenDB executes to fetch data directly during chat.

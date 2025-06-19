@@ -70,6 +70,8 @@ namespace SlowTests.Server.Documents.AI.AiAgent
             ];
 
             await store.Maintenance.SendAsync(new AddOrUpdateAiAgentOperation<OutputSchema>("shopping assistant", agent));
+            WaitForUserToContinueTheTest(store, false);
+
             var r = await store.Maintenance.SendAsync(new StartChatOperation<OutputSchema>("shopping assistant", "what goes well with my cheese?",
                 new Dictionary<string, object> { ["company"] = "companies/90-A" }));
 

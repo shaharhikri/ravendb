@@ -13,7 +13,7 @@ namespace Raven.Client.Documents.Operations.AI.Agents
     {
         public AddOrUpdateAiAgentOperation(string name, AiAgentConfiguration configuration) : base(name, configuration)
         {
-            if (string.IsNullOrEmpty(configuration.OutputSchema))
+            if (configuration.OutputSchema == null)
                 throw new ArgumentException("OutputSchema cannot be null or empty.", nameof(configuration.OutputSchema));
         }
     }
@@ -22,6 +22,7 @@ namespace Raven.Client.Documents.Operations.AI.Agents
     {
         private readonly string _name;
         private readonly AiAgentConfiguration _configuration;
+        private static readonly TSchema Instance = new TSchema();
 
         public AddOrUpdateAiAgentOperation(string name, AiAgentConfiguration configuration)
         {
@@ -30,6 +31,7 @@ namespace Raven.Client.Documents.Operations.AI.Agents
 
             _name = name;
             _configuration = configuration;
+            _configuration.OutputSchema ??= Instance;
         }
 
         public RavenCommand<AiAgentConfigurationResult> GetCommand(DocumentConventions conventions, JsonOperationContext context)
@@ -48,6 +50,7 @@ namespace Raven.Client.Documents.Operations.AI.Agents
                 _name = name;
                 _configuration = configuration;
                 _conventions = conventions;
+                // _configuration.OutputSchema ??= Instance;
             }
             public override bool IsReadRequest => false;
             public override HttpRequestMessage CreateRequest(JsonOperationContext ctx, ServerNode node, out string url)
@@ -59,7 +62,6 @@ namespace Raven.Client.Documents.Operations.AI.Agents
                     Method = HttpMethod.Put,
                     Content = new BlittableJsonContent(async stream =>
                     {
-                        _configuration.OutputSchema ??= DocumentConventions.Default.Serialization.DefaultConverter.ToBlittable(new TSchema(), ctx).ToString();
                         await ctx.WriteAsync(stream, DocumentConventions.Default.Serialization.DefaultConverter.ToBlittable(_configuration, ctx)).ConfigureAwait(false);
                     }, _conventions)
                 };

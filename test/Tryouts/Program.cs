@@ -10,6 +10,7 @@ using Xunit;
 using FastTests;
 using Raven.Client.Documents.Operations.AI;
 using SlowTests.Server.Documents.AI;
+using SlowTests.Server.Documents.AI.AiAgent;
 
 namespace Tryouts;
 
@@ -33,11 +34,11 @@ public static class Program
             try
             {
                 using (var testOutputHelper = new ConsoleTestOutputHelper())
-                using (var test = new ChatCompletionClientTests(testOutputHelper))
+                using (var test = new AiAgentBasics(testOutputHelper))
                 {
                     DebuggerAttachedTimeout.DisableLongTimespan = true;
                     var p = GetGenAiConfig(RavenAiIntegration.OpenAi);
-                    await test.GenAiClientSanityTest(p.Options, p.Configuration);
+                    await test.CanCreateAiAgent(p.Options, p.Configuration);
                 }
             }
             catch (Exception e)

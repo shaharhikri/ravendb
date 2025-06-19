@@ -35,6 +35,13 @@ public class AiAgentClientApiBasics : RavenTestBase
 
     [RavenTheory(RavenTestCategory.Ai)]
     [RavenGenAiData(IntegrationType = RavenAiIntegration.OpenAi, DatabaseMode = RavenDatabaseMode.Single, CheckCanConnect = false, NightlyBuildRequired = false)]
+    public async Task AiAgentClusterCreateAgentTest(Options options, GenAiConfiguration config)
+    {
+
+    }
+
+    [RavenTheory(RavenTestCategory.Ai)]
+    [RavenGenAiData(IntegrationType = RavenAiIntegration.OpenAi, DatabaseMode = RavenDatabaseMode.Single, CheckCanConnect = false, NightlyBuildRequired = false)]
     public async Task AiAgentClientApiBasicTest(Options options, GenAiConfiguration config)
     {
         using var store = GetDocumentStore(options);

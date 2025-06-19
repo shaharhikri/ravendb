@@ -24,6 +24,7 @@ internal class AiAgentProcessorForAddOrUpdateAiAgent<TRequestHandler, TOperation
         
         var name = RequestHandler.GetStringQueryString("name", required: true);
         var cfg = JsonDeserializationClient.AiAgentConfiguration(options);
+        cfg.OutputSchema = cfg.OutputSchema?.ToString();
 
         var r = await ServerStore.SendToLeaderAsync(new AddOrUpdateAiAgentCommand(RequestHandler.DatabaseName, name, cfg, RequestHandler.GetRaftRequestIdFromQuery()), token.Token);
         
