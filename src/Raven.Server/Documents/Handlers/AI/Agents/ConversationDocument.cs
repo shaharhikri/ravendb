@@ -207,7 +207,7 @@ public class ConversationDocument([NotNull] string agent, BlittableJsonReaderObj
                     ["description"] = q.Description,
                     ["parameters"] = context.Sync.ReadForMemory(paramsSchema, "params/schema")
                 },
-                ["strict"] = true
+                // ["strict"] = true
             };
             tools.Add(context.ReadObject(tool, "tool"));
         }
@@ -223,7 +223,7 @@ public class ConversationDocument([NotNull] string agent, BlittableJsonReaderObj
                     ["description"] = a.Description,
                     ["parameters"] = context.Sync.ReadForMemory(paramsSchema, "params/schema")
                 },
-                ["strict"] = true
+                // ["strict"] = true
             };
             tools.Add(context.ReadObject(tool, "tool"));
         }

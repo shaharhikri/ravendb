@@ -44,7 +44,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
     private readonly HttpClientCacheKey _httpClientCacheKey;
     private readonly HttpClient _client;
     private readonly IMemoryContextPool _contextPool;
-    private readonly string _apiKey;
+    protected readonly string _apiKey;
 
     public static readonly DocumentConventions ConventionsToUse = new DocumentConventions
     {
@@ -63,13 +63,13 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
 
     public static ChatCompletionClient CreateChatCompletionClient(IMemoryContextPool contextPool, AiConnectionString connection)
     {
-        if (connection.TryGetParametersForGenAiTesting(out var uri, out var apiKey, out var model, out var organizationId, out var projectId, out var think) == false)
+        if (connection.TryGetParametersForGenAiTesting(out var uri, out var apiKey, out var model, out var organizationId, out var projectId, out var think, out bool vertex) == false)
         {
             var connectorType = connection.GetActiveProvider();
             throw new NotSupportedException($"The specified provider (\"{connectorType.ToString()}\") is not supported.");
         }
 
-        return new ChatCompletionClient(contextPool, uri, apiKey, model, organizationId, projectId, think, ConventionsToUse);
+        return vertex ? new ChatCompletionVertexClient(contextPool, uri, apiKey, model, organizationId, projectId, think, ConventionsToUse) : new ChatCompletionClient(contextPool, uri, apiKey, model, organizationId, projectId, think, ConventionsToUse);
     }
 
     internal ChatCompletionClient(IMemoryContextPool contextPool, string baseUri, string apiKey, string model, string organizationId, string projectId, bool? think = null, DocumentConventions conventions = null)
@@ -320,7 +320,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
         };
     }
 
-    public async Task<AiResponse> CompleteAsync(JsonOperationContext context, HttpRequestMessage request, AiUsage usage, CancellationToken token)
+    public virtual async Task<AiResponse> CompleteAsync(JsonOperationContext context, HttpRequestMessage request, AiUsage usage, CancellationToken token)
     {
         AddDefaultHeaders(request);
         using var response = await SendRequestAsync(request, token);
@@ -448,7 +448,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
 
     public HttpRequestMessage CreateCompletionRequest(JsonOperationContext ctx, List<BlittableJsonReaderObject> messages, string schema) => CreateCompletionRequest(ctx, messages, tools: null, useTools: false, streaming: false, schema);
 
-    public HttpRequestMessage CreateCompletionRequest(JsonOperationContext ctx,
+    public virtual HttpRequestMessage CreateCompletionRequest(JsonOperationContext ctx,
         List<BlittableJsonReaderObject> messages,
         List<BlittableJsonReaderObject> tools,
         bool useTools,
@@ -522,7 +522,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
         writer.WriteString(Constants.RequestFields.JsonSchema);
         writer.WriteComma();
         writer.WritePropertyName(Constants.RequestFields.JsonSchema);
-        writer.WriteObject(GetStructuredOutputSchemaAsBlittable());
+        writer.WriteObject(GetStructuredOutputSchemaAsBlittable(ctx, schema));
         writer.WriteEndObject();
 
         if (streaming)
@@ -548,13 +548,13 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
 
         writer.WriteEndObject();
         return;
+    }
 
-        BlittableJsonReaderObject GetStructuredOutputSchemaAsBlittable()
+    protected BlittableJsonReaderObject GetStructuredOutputSchemaAsBlittable(JsonOperationContext ctx, string schema)
+    {
+        using (var stream = RecyclableMemoryStreamFactory.GetRecyclableStream(Encoding.UTF8.GetBytes(schema)))
         {
-            using (var stream = RecyclableMemoryStreamFactory.GetRecyclableStream(Encoding.UTF8.GetBytes(schema)))
-            {
-                return ctx.Sync.ReadForMemory(stream, "json");
-            }
+            return ctx.Sync.ReadForMemory(stream, "json");
         }
     }
 
@@ -575,7 +575,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
         await HttpResponseHelper.CopyContentAsync(r, response);
     }
 
-    private void AddDefaultHeaders(HttpRequestMessage request)
+    protected virtual void AddDefaultHeaders(HttpRequestMessage request)
     {
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(Constants.RequestFields.MediaTypeApplicationJson));
         request.Headers.Authorization = string.IsNullOrEmpty(_apiKey) ? null : new AuthenticationHeaderValue(Constants.RequestFields.AuthorizationApiKeyProperty, _apiKey);
@@ -611,7 +611,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
     }
 
     [DoesNotReturn]
-    private void HandleUnsuccessfulResponse(HttpResponseMessage response, BlittableJsonReaderObject responseContent)
+    protected virtual void HandleUnsuccessfulResponse(HttpResponseMessage response, BlittableJsonReaderObject responseContent)
     {
         var headers = response.Headers;
         var reqId = GetRequestId(headers);
@@ -691,7 +691,7 @@ internal class ChatCompletionClient : IChatCompletionClient, IChatCompletionClie
         }
     }
 
-    private static string GetRequestId(HttpResponseHeaders headers)
+    protected static string GetRequestId(HttpResponseHeaders headers)
     {
         if (headers.TryGetValues(Constants.Headers.RequestId, out var values) == false || values.IsNullOrEmpty())
         {

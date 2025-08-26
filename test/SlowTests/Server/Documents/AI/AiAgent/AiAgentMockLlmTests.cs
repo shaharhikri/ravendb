@@ -110,7 +110,7 @@ namespace SlowTests.Server.Documents.AI.AiAgent
 
             protected override ChatCompletionClient CreateClient(AiConnectionString connection)
             {
-                if (connection.TryGetParametersForGenAiTesting(out var uri, out var apiKey, out var model, out var organizationId, out var projectId, out var think) ==
+                if (connection.TryGetParametersForGenAiTesting(out var uri, out var apiKey, out var model, out var organizationId, out var projectId, out var think, out _) ==
                     false)
                 {
                     var connectorType = connection.GetActiveProvider();

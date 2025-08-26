@@ -213,7 +213,7 @@ public sealed class AiConnectionString : ConnectionString
                (AbstractAiSettings)MistralAiSettings;
     }
 
-    internal bool TryGetParametersForGenAiTesting(out string uri, out string apiKey, out string model, out string organizationId, out string projectId, out bool? think)
+    internal bool TryGetParametersForGenAiTesting(out string uri, out string apiKey, out string model, out string organizationId, out string projectId, out bool? think, out bool vertex)
     {
         uri = null;
         apiKey = null;
@@ -221,6 +221,7 @@ public sealed class AiConnectionString : ConnectionString
         organizationId = null;
         projectId = null;
         think = null;
+        vertex = false;
 
         switch (ModelType)
         {
@@ -246,6 +247,12 @@ public sealed class AiConnectionString : ConnectionString
                 uri = OllamaSettings.Uri; 
                 model = OllamaSettings.Model;
                 think = OllamaSettings.Think;
+                return true;
+            case AiConnectorType.Google:
+                model = GoogleSettings.Model;
+                apiKey = GoogleSettings.ApiKey;
+                uri = GoogleSettings.Endpoint;
+                vertex = true;
                 return true;
         }
 

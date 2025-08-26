@@ -6,12 +6,13 @@ namespace Raven.Client.Documents.Operations.AI;
 
 public sealed class GoogleSettings : AbstractAiSettings
 {
-    public GoogleSettings(string model, string apiKey, GoogleAIVersion? aiVersion = null, int? dimensions = null)
+    public GoogleSettings(string model, string apiKey, GoogleAIVersion? aiVersion = null, int? dimensions = null, string endPoint = null)
     {
         Model = model;
         ApiKey = apiKey;
         AiVersion = aiVersion;
         Dimensions = dimensions;
+        Endpoint = endPoint;
     }
 
     public GoogleSettings()
@@ -21,6 +22,11 @@ public sealed class GoogleSettings : AbstractAiSettings
 
     /// <summary>The model that should be used.</summary>
     public string Model { get; set; }
+
+    /// <summary>
+    /// The service endpoint that the client will send requests to.
+    /// </summary>
+    public string Endpoint { get; set; }
 
     /// <summary>The API key to use to authenticate with the service.</summary>
     public string ApiKey { get; set; }
@@ -70,6 +76,9 @@ public sealed class GoogleSettings : AbstractAiSettings
         var json = base.ToJson();
         json[nameof(Model)] = Model;
         json[nameof(ApiKey)] = ApiKey;
+
+        if (Endpoint != null)
+            json[nameof(Endpoint)] = Endpoint;
 
         if (AiVersion != null)
             json[nameof(AiVersion)] = AiVersion.Value.ToString("G"); // Explicitly convert to string to avoid enum serialization

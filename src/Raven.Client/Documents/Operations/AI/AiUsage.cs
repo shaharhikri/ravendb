@@ -27,6 +27,14 @@ public class AiUsage : IDynamicJsonValueConvertible
         }
     }
 
+    internal void UpdateFrom(AiUsage usage)
+    {
+        PromptTokens += usage.PromptTokens;
+        CompletionTokens += usage.CompletionTokens;
+        TotalTokens += usage.TotalTokens;
+        CachedTokens += usage.CachedTokens;
+    }
+
     public DynamicJsonValue ToJson()
     {
         return new DynamicJsonValue
