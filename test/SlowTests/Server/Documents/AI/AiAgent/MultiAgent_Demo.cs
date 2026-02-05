@@ -1,9 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.PerformanceData;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using FastTests;
+using Hl7.Fhir.Utility;
 using Newtonsoft.Json;
 using Raven.Client.Documents;
 using Raven.Client.Documents.AI;
@@ -18,6 +21,8 @@ namespace SlowTests.Server.Documents.AI.AiAgent
 {
     public class MultiAgent_Demo(ITestOutputHelper output) : RavenTestBase(output)
     {
+
+        static bool WaitForUser = false;
 
         [RavenTheory(RavenTestCategory.Ai)]
         [RavenGenAiData(IntegrationType = RavenAiIntegration.OpenAi, DatabaseMode = RavenDatabaseMode.Single)]
@@ -53,14 +58,14 @@ namespace SlowTests.Server.Documents.AI.AiAgent
             };
             productsSearchAgent.Parameters.Add(new AiAgentParameter("maxBudgetNis", "Max budget (NIS)", AiAgentParameter.AiAgentParameterPolicy.AllowedModelGeneration));
             productsSearchAgent.Parameters.Add(new AiAgentParameter("minRamGb", "Min RAM (GB)", AiAgentParameter.AiAgentParameterPolicy.AllowedModelGeneration));
+            var productsSearchId = (await store.AI.CreateAgentAsync(productsSearchAgent, AgentAnswer.Instance)).Identifier;
 
-            // orders-agent (CreateOrder + ChangeOrder) with REQUIRED customerId parameter
+            // orders-agent
             var ordersAgent = new AiAgentConfiguration(
                 "orders-agent",
                 config.ConnectionStringName,
                 "Create ONE order that contains ALL returned product IDs. " +
-                "You MUST always include customerId in tool calls. " +
-                "When changing an order, you MUST provide the same customerId and orderId."
+                "You MUST always include customerId in tool calls. "
             )
             {
                 Actions = new List<AiAgentToolAction>
@@ -68,16 +73,13 @@ namespace SlowTests.Server.Documents.AI.AiAgent
                     new AiAgentToolAction("CreateOrder", "Create a single order with many product ids.")
                     {
                         ParametersSampleObject = JsonConvert.SerializeObject(CreateOrderRequest.Instance)
-                    },
-                    new AiAgentToolAction("ChangeOrder", "Add or remove a single product id from an existing order.")
-                    {
-                        ParametersSampleObject = JsonConvert.SerializeObject(ChangeOrderRequest.Instance)
                     }
                 }
             };
             ordersAgent.Parameters.Add(new AiAgentParameter("customerId", "REQUIRED. The id of the customer making the order.", AiAgentParameter.AiAgentParameterPolicy.Default));
+            var ordersAgentId = (await store.AI.CreateAgentAsync(ordersAgent, AgentAnswer.Instance)).Identifier;
 
-            // payment-agent (no-op, mark Paid) also receives customerId for symmetry
+            // payment-agent
             var paymentAgent = new AiAgentConfiguration(
                 "payment-agent",
                 config.ConnectionStringName,
@@ -92,36 +94,46 @@ namespace SlowTests.Server.Documents.AI.AiAgent
                     }
                 }
             };
+            paymentAgent.Parameters.Add(new AiAgentParameter("orderId", "REQUIRED. The id of the order.", AiAgentParameter.AiAgentParameterPolicy.AllowedModelGeneration));
             paymentAgent.Parameters.Add(new AiAgentParameter("customerId", "REQUIRED. The id of the customer making the order.", AiAgentParameter.AiAgentParameterPolicy.Default));
             paymentAgent.Parameters.Add(new AiAgentParameter("creditCardNumber", "REQUIRED. the credit card number for paying.", AiAgentParameter.AiAgentParameterPolicy.Default));
-
-            var productsSearchId = (await store.AI.CreateAgentAsync(productsSearchAgent, new { Answer = "" })).Identifier;
-            var ordersAgentId = (await store.AI.CreateAgentAsync(ordersAgent, new { Answer = "" })).Identifier;
-            var paymentAgentId = (await store.AI.CreateAgentAsync(paymentAgent, new { Answer = "" })).Identifier;
+            var paymentAgentId = (await store.AI.CreateAgentAsync(paymentAgent, AgentAnswer.Instance)).Identifier;
 
             // root agent
             var root = new AiAgentConfiguration(
                 "store-clerk-agent",
                 config.ConnectionStringName,
-                "You are the store clerk (root). " +
-                "1) Use products-search-agent to get product ids. " +
-                "2) Use orders-agent/CreateOrder to create ONE order containing ALL ids. " +
-                "3) If user asks, use orders-agent/ChangeOrder (must include customerId and validate ownership). " +
-                "4) Then use payment-agent/ChargeOrder (must include customerId)."
+                "You are the store clerk (root) for a computer store.\n\n" +
+                "Rules:\n" +
+                "1) Always act for the current customer identified by the REQUIRED parameter 'customerId'.\n" +
+                "2) Never invent product ids or order ids. Always obtain ids from your sub-agents.\n" +
+                "3) The store uses ONE order that contains multiple product ids (NOT one order per product).\n" +
+                "Always ensure the sub-agent receives 'customerId' so it can validate ownership.\n" +
+                "4) For payments, delegate to the payment sub-agent.\n" +
+                "5) PAYMENT GATING (STRICT):\n" +
+                "   - Do NOT ask, suggest, or initiate payment.\n" +
+                "   - Only delegate to the payment sub-agent if the user explicitly requests payment (e.g. 'pay', 'charge', 'checkout', 'place the order').\n" +
+                "   - If the user did NOT explicitly request payment, you MUST NOT mention payment at all.\n" +
+                "6) The parameter 'creditCardNumber' is hidden from you. Do not ask for it and do not mention it to the user.\n\n" +
+                "7) ORDER GATING (STRICT): Do NOT create an order until the user explicitly requests creating an order.\n\n" +
+                "Flow:\n" +
+                "A) Ask the products sub-agent to find matching products.\n" +
+                "B) If the user explicitly requests an order: ask the orders sub-agent to create ONE order containing the desired product ids.\n" +
+                "C) If (and only if) the user explicitly requests payment: ask the payment sub-agent to charge the order.\n\n" +
+                "Output:\n" +
+                "Return your answer to the user and a short confirmation of what happened."
             )
             {
                 SubAgents =
                 [
-                    new AiAgentToolSubAgent { Identifier = productsSearchId, Description = "Find products" },
-                    new AiAgentToolSubAgent { Identifier = ordersAgentId, Description = "Create/change a single order" },
-                    new AiAgentToolSubAgent { Identifier = paymentAgentId, Description = "Charge payment" }
+                    new AiAgentToolSubAgent { Identifier = productsSearchId, Description = "Find products - Use this tool to get products and their ids." },
+                    new AiAgentToolSubAgent { Identifier = ordersAgentId, Description = "Create a single order - Use this tool to create ONE order containing ALL ids. " },
+                    new AiAgentToolSubAgent { Identifier = paymentAgentId, Description = "Charge payment - use this tool to make an order payment (must include customerId AND orderId)" }
                 ]
             };
             root.Parameters.Add(new AiAgentParameter("customerId", "REQUIRED. The id of the customer."));
-            root.Parameters.Add(new AiAgentParameter("creditCardNumber", "REQUIRED. the credit card number for paying.", sendToModel: false)); // we wont expose this to the model, we'll only pass it to the payment-agent
-
-
-            var rootId = (await store.AI.CreateAgentAsync(root, new { Answer = "" })).Identifier;
+            root.Parameters.Add(new AiAgentParameter("creditCardNumber", "REQUIRED. the credit card number for paying.", sendToModel: false)); // we wont expose this to the roo-agent model, we'll only pass it to the payment-agent
+            var rootId = (await store.AI.CreateAgentAsync(root, AgentAnswer.Instance)).Identifier;
 
             var chat = store.AI.Conversation(
                 rootId,
@@ -131,6 +143,7 @@ namespace SlowTests.Server.Documents.AI.AiAgent
 
             // ------------------- Handles -------------------
             int orderNumber = 0;
+            int messageNumber = 0;
 
             chat.Handle<CreateOrderRequest>("orders-agent/CreateOrder", async req =>
             {
@@ -164,57 +177,9 @@ namespace SlowTests.Server.Documents.AI.AiAgent
                     await session.SaveChangesAsync();
                 }
 
-                return new ActionToolResult { IsSuccessful = true, Answer = orederId };
+                return new ActionToolResult { IsSuccessful = true, Answer = $"Order has been created, with id '{orederId}'" };
             });
-
-            chat.Handle<ChangeOrderRequest>("orders-agent/ChangeOrder", async req =>
-            {
-                if (string.IsNullOrWhiteSpace(req.CustomerId))
-                    return new ActionToolResult { IsSuccessful = false, Answer = "customerId is required" };
-
-                if (string.IsNullOrWhiteSpace(req.OrderId))
-                    return new ActionToolResult { IsSuccessful = false, Answer = "orderId is required" };
-
-                using (var session = store.OpenAsyncSession())
-                {
-
-                    var order = await session.LoadAsync<Order>(req.OrderId);
-                    if (order == null)
-                        return new ActionToolResult { IsSuccessful = false, Answer = $"Order '{req.OrderId}' not found" };
-
-                    // Ownership validation requested
-                    if (string.Equals(order.CustomerId, req.CustomerId, StringComparison.OrdinalIgnoreCase) == false)
-                        return new ActionToolResult { IsSuccessful = false, Answer = "Order does not belong to this customerId" };
-
-                    if (string.Equals(order.Status, "Paid", StringComparison.OrdinalIgnoreCase))
-                        return new ActionToolResult { IsSuccessful = false, Answer = "Cannot change a paid order" };
-
-                    var add = req.AddProductId;
-                    var remove = req.RemoveProductId;
-
-                    // Exactly one of them
-                    if (string.IsNullOrWhiteSpace(add) == string.IsNullOrWhiteSpace(remove))
-                        return new ActionToolResult { IsSuccessful = false, Answer = "Provide exactly one of AddProductId or RemoveProductId" };
-
-                    if (string.IsNullOrWhiteSpace(add) == false)
-                    {
-                        var p = await session.LoadAsync<Product>(add);
-                        if (p == null)
-                            return new ActionToolResult { IsSuccessful = false, Answer = $"Product '{add}' not found" };
-
-                        if (order.ProductIds.Contains(add, StringComparer.OrdinalIgnoreCase) == false)
-                            order.ProductIds.Add(add);
-                    }
-
-                    if (string.IsNullOrWhiteSpace(remove) == false)
-                        order.ProductIds.RemoveAll(x => string.Equals(x, remove, StringComparison.OrdinalIgnoreCase));
-                    
-                    await session.SaveChangesAsync();
-                }
-
-                return new ActionToolResult { IsSuccessful = true, Answer = "OK" };
-            });
-
+            
             chat.Handle<ChargeOrderRequest>("payment-agent/ChargeOrder", async req =>
             {
                 if (string.IsNullOrWhiteSpace(req.CustomerId))
@@ -239,120 +204,56 @@ namespace SlowTests.Server.Documents.AI.AiAgent
                 return new ActionToolResult { IsSuccessful = true, Answer = "PAID" };
             });
 
-            // ------------------- Run 1: create + pay -------------------
+            // // ------------------- Run: search, create, pay -------------------
+            // await Talk("Find laptops within a budget of 3,500 NIS that have at least 16 GB of RAM.");
+            //
+            // await Talk("Create ONE order that contains ALL top matching laptops for my customer.");
+            //
+            // await Talk("Now I want to pay, charge the order please.");
 
-            chat.SetUserPrompt(
-                "Budget 3500 NIS, min 16GB RAM. " +
-                "Create ONE order that contains ALL top matching laptops for my customer, then charge it."
-            );
+            // ------------------- Run: search, create, create, pay -------------------
+            await Talk("Find laptops within a budget of 3,500 NIS that have at least 16 GB of RAM.");
 
-            var r1 = await chat.RunAsync<object>();
-            Assert.Equal(AiConversationResult.Done, r1.Status);
+            await Talk("Create ONE order that contains ALL top matching laptops for my customer.");
+
+            await Talk("Create Another order that contains only one of the matching laptops for my customer.");
+
+            await Talk("Now I want to pay for the second order, charge the order please.");
+
 
             WaitForUserToContinueTheTest(store, false);
-
-
-            string orderId;
-            using (var session = store.OpenAsyncSession())
+           
+            async Task Talk(string prompt)
             {
-                var orders = await session.Advanced.AsyncRawQuery<Order>("from Orders")
-                    .ToListAsync();
+                chat.SetUserPrompt(prompt);
+                var r1 = await chat.RunAsync<AgentAnswer>();
+                Assert.Equal(AiConversationResult.Done, r1.Status);
 
-                Assert.Equal(1, orders.Count);
-                var o = orders.Single();
-                orderId = o.Id;
+                // for demo
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"User[{++messageNumber}]: " + prompt);
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine($"Agent[{messageNumber}]: " + r1.Answer.Answer);
+                Console.ForegroundColor = ConsoleColor.DarkCyan;
 
-                Assert.Equal("Customers/1", o.CustomerId);
-                Assert.Equal("Paid", o.Status);
-                Assert.Equal(3, o.ProductIds.Count); // top 3
+                Console.Write("Orders: ");
+                using (var session = store.OpenAsyncSession())
+                {
+                    var orders = await session.Advanced.AsyncRawQuery<Order>("from Orders").ToListAsync();
+                    Console.WriteLine(orders.IsNullOrEmpty() ? "None" : Environment.NewLine + System.Text.Json.JsonSerializer.Serialize(orders, new JsonSerializerOptions
+                    {
+                        WriteIndented = true
+                    }));
+                }
+                Console.ForegroundColor = ConsoleColor.White;
+                Console.WriteLine();
+
+                if (WaitForUser)
+                {
+                    WaitForUserToContinueTheTest(store, false);
+                    Console.WriteLine();
+                }
             }
-
-            // ------------------- Run 2: attempt change on paid (should not change) -------------------
-
-            chat.SetUserPrompt($"Add product 'Products/6' to order '{orderId}'");
-            var r2 = await chat.RunAsync<object>();
-            Assert.Equal(AiConversationResult.Done, r2.Status);
-
-
-            using (var session = store.OpenAsyncSession())
-            {
-                var o = await session.LoadAsync<Order>(orderId);
-                Assert.Equal("Paid", o.Status);
-                Assert.Equal(3, o.ProductIds.Count); // unchanged
-            }
-
-            // // ------------------- Run 3: new chat create, change BEFORE pay, then pay -------------------
-            //
-            // var chat2 = store.AI.Conversation(
-            //     rootId,
-            //     "store-chats/2",
-            //     new AiConversationCreationOptions().AddParameter("customerId", "Customers/1")
-            // );
-            //
-            // // re-register minimal handlers (copy)
-            // chat2.Handle<CreateOrderRequest>("orders-agent/CreateOrder", chat.Handlers["orders-agent/CreateOrder"]);
-            // chat2.Handle<ChangeOrderRequest>("orders-agent/ChangeOrder", chat.Handlers["orders-agent/ChangeOrder"]);
-            // chat2.Handle<ChargeOrderRequest>("payment-agent/ChargeOrder", chat.Handlers["payment-agent/ChargeOrder"]);
-            //
-            // chat2.SetUserPrompt(
-            //     "Budget 3500 NIS, min 16GB RAM. Create ONE order with the top 3 products for my customer. Do NOT charge yet."
-            // );
-            //
-            // var r3 = await chat2.RunAsync<object>();
-            // Assert.Equal(AiConversationResult.Done, r3.Status);
-            //
-            // string createdOrderId;
-            // using (var session = store.OpenAsyncSession())
-            // {
-            //     var orders = await session.Advanced.AsyncRawQuery<Order>("from Orders")
-            //         .ToListAsync();
-            //
-            //     // now 2 orders total
-            //     Assert.Equal(2, orders.Count);
-            //
-            //     // pick the Created one
-            //     var created = orders.Single(x => x.Status == "Created");
-            //     createdOrderId = created.Id;
-            //     Assert.Equal(3, created.ProductIds.Count);
-            // }
-            //
-            // chat2.SetUserPrompt(
-            //     $"Add product 'Products/6' to order '{createdOrderId}', then charge that order."
-            // );
-            //
-            // var r4 = await chat2.RunAsync<object>();
-            // Assert.Equal(AiConversationResult.Done, r4.Status);
-            //
-            // using (var session = store.OpenAsyncSession())
-            // {
-            //     var o = await session.LoadAsync<Order>(createdOrderId);
-            //     Assert.Equal("Paid", o.Status);
-            //     Assert.Equal(4, o.ProductIds.Count);
-            //     Assert.Contains("Products/6", o.ProductIds);
-            // }
-            //
-            // // ------------------- Run 4: ownership validation -------------------
-            // // Attempt to change with WRONG customerId should fail (handler blocks)
-            //
-            // var chat3 = store.AI.Conversation(
-            //     rootId,
-            //     "store-chats/3",
-            //     new AiConversationCreationOptions().AddParameter("customerId", "Customers/999")
-            // );
-            //
-            // chat3.Handle<CreateOrderRequest>("orders-agent/CreateOrder", chat.Handlers["orders-agent/CreateOrder"]);
-            // chat3.Handle<ChangeOrderRequest>("orders-agent/ChangeOrder", chat.Handlers["orders-agent/ChangeOrder"]);
-            // chat3.Handle<ChargeOrderRequest>("payment-agent/ChargeOrder", chat.Handlers["payment-agent/ChargeOrder"]);
-            //
-            // chat3.SetUserPrompt($"Add product 'Products/6' to order '{createdOrderId}'");
-            // var r5 = await chat3.RunAsync<object>();
-            // Assert.Equal(AiConversationResult.Done, r5.Status);
-            //
-            // using (var session = store.OpenAsyncSession())
-            // {
-            //     var o = await session.LoadAsync<Order>(createdOrderId);
-            //     Assert.Equal(4, o.ProductIds.Count); // unchanged by wrong customer
-            // }
         }
 
         private static async Task SeedProducts(IDocumentStore store)
@@ -405,23 +306,6 @@ namespace SlowTests.Server.Documents.AI.AiAgent
             public List<string> ProductIds { get; set; }
         }
 
-        private class ChangeOrderRequest
-        {
-            public static ChangeOrderRequest Instance = new()
-            {
-                CustomerId = "Customers/1",
-                OrderId = "Orders/1",
-                AddProductId = "Products/6"
-            };
-
-            public string CustomerId { get; set; }
-            public string OrderId { get; set; }
-
-            // ultra-simple: either add OR remove a single product
-            public string AddProductId { get; set; }
-            public string RemoveProductId { get; set; }
-        }
-
         private class ChargeOrderRequest
         {
             public static ChargeOrderRequest Instance = new()
@@ -441,6 +325,14 @@ namespace SlowTests.Server.Documents.AI.AiAgent
         private class ActionToolResult
         {
             public bool IsSuccessful { get; set; }
+            public string Answer { get; set; }
+        }
+
+        // root result
+        private class AgentAnswer
+        {
+            public static AgentAnswer Instance = new AgentAnswer() { Answer = "The model answer" };
+
             public string Answer { get; set; }
         }
     }
