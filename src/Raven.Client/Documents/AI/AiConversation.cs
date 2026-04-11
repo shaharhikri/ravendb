@@ -262,7 +262,7 @@ internal class AiConversation : IAiConversationOperations
 
     public Task<AiAnswer<string>> StreamAsync(Func<string, Task> streamedChunksCallback, CancellationToken token = default)
     {
-        return StreamAsync<string>((string)null, streamedChunksCallback, new AiOutputOptions { NoSchema = true }, token);
+        return StreamAsync<string>(string.Empty, streamedChunksCallback, new AiOutputOptions { NoSchema = true }, token);
     }
 
     public Task<AiAnswer<string>> RunAsync(CancellationToken token = default)

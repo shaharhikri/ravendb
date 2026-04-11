@@ -256,8 +256,7 @@ public class ChatCompletionClient : IDisposable
                     {
                         // For unstructured output, stream the raw text chunks directly
                         stringContent.Append(content);
-                        var bytes = Encoding.UTF8.GetBytes(content.ToString());
-                        await streamedPropertyCallback(bytes);
+                        await streamedPropertyCallback(Encoding.UTF8.GetBytes(content.ToString()));
                     }
                 }
 
@@ -437,9 +436,9 @@ public class ChatCompletionClient : IDisposable
                 RefusedToAnswerException.Throw(refusal, responseContent.ToString(), finishReason, GetRequestId(response.Headers));
             }
 
-            object result = structuredOutput ? 
-                content.ToString() : 
-                context.Sync.ReadForMemory(content, "ai/output");
+            object result = structuredOutput
+                ? context.Sync.ReadForMemory(content, "ai/output")
+                : content.ToString();
 
             Message.Modifications ??= new DynamicJsonValue(Message);
             Message.Modifications[Constants.ResponseFields.Content] = result;
