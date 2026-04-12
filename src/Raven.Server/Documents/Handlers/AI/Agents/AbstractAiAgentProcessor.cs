@@ -58,7 +58,7 @@ namespace Raven.Server.Documents.Handlers.AI.Agents
 
             if (streaming)
             {
-                var streamPropertyPath = RequestHandler.GetStringQueryString("streamPropertyPath");
+                var streamPropertyPath = RequestHandler.GetStringQueryString("streamPropertyPath", required: body.NoSchema == false);
                 HttpContext.Response.Headers.ContentType = "text/event-stream";
                 RequestHandler.DisableResponseBuffering();
 

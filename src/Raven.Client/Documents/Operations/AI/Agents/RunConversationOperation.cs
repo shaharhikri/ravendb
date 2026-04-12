@@ -257,6 +257,17 @@ public class RunConversationOperation<TSchema> : IMaintenanceOperation<Conversat
             if (_parent._debug.HasValue)
                 url += $"&debug={_parent._debug.Value}";
 
+            var outputOptions = _parent._outputOptions;
+            if (outputOptions?.SampleObject != null && outputOptions.SampleObject is not string)
+            {
+                outputOptions = new AiOutputOptions
+                {
+                    SampleObject = _conventions.Serialization.DefaultConverter.ToBlittable(outputOptions.SampleObject, ctx).ToString(),
+                    OutputSchema = outputOptions.OutputSchema,
+                    NoSchema = outputOptions.NoSchema
+                };
+            }
+
             var body = new ConversionRequestBody
             {
                 ActionResponses = _parent._actionResponses,
@@ -264,7 +275,7 @@ public class RunConversationOperation<TSchema> : IMaintenanceOperation<Conversat
                 UserPrompt = _parent._promptParts,
                 CreationOptions = _parent._options,
                 AttachmentCommands = _parent._attachmentsCommands,
-                OutputOptions = _parent._outputOptions
+                OutputOptions = outputOptions
             };
 
             var request = new HttpRequestMessage

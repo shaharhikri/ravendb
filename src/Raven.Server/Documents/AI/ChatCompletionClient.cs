@@ -256,7 +256,9 @@ public class ChatCompletionClient : IDisposable
                     {
                         // For unstructured output, stream the raw text chunks directly
                         stringContent.Append(content);
-                        await streamedPropertyCallback(Encoding.UTF8.GetBytes(content.ToString()));
+                        streamedPropertyBuffer.Append(content.AsSpan());
+                        await streamedPropertyCallback(streamedPropertyBuffer.AsMemory());
+                        streamedPropertyBuffer.Length = 0;
                     }
                 }
 
