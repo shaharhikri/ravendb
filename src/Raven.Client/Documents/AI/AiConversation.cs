@@ -235,6 +235,9 @@ internal class AiConversation : IAiConversationOperations
 
     public async Task<AiAnswer<TAnswer>> StreamAsync<TAnswer>(string streamPropertyPath, Func<string, Task> streamedChunksCallback, CancellationToken token = default)
     {
+        if (typeof(TAnswer) == typeof(string))
+            return await StreamAsync<TAnswer>(streamPropertyPath, streamedChunksCallback, new AiOutputOptions { NoSchema = true }, token).ConfigureAwait(false);
+
         while (true)
         {
             var r = await RunAsyncInternal<TAnswer>(streamPropertyPath, streamedChunksCallback, outputOptions: null, token).ConfigureAwait(false);
