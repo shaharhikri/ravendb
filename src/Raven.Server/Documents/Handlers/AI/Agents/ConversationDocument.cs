@@ -249,14 +249,17 @@ public class ConversationDocument([NotNull] string agent, BlittableJsonReaderObj
 
     public const string DateProperty = "date";
     public const string UsageProperty = "usage";
+    public const string OutputSchemaProperty = "output_schema";
 
-    public void AddMessage(JsonOperationContext context, BlittableJsonReaderObject msg, AiUsage usage)
+    public void AddMessage(JsonOperationContext context, BlittableJsonReaderObject msg, AiUsage usage, bool? isNoSchema = null)
     {
         var currentDate = DateTime.UtcNow;
         msg.Modifications ??= new DynamicJsonValue(msg);
         msg.Modifications[DateProperty] = currentDate;
         if (usage != null)
             msg.Modifications[UsageProperty] = usage.ToJson();
+        if (isNoSchema.HasValue)
+            msg.Modifications[OutputSchemaProperty] = isNoSchema.Value;
         Messages.Add(msg);
         LastMessageAt = currentDate;
     }

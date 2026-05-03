@@ -14,6 +14,7 @@ internal class ConversionRequestBody : IDynamicJson
     public IEnumerable<ContentPart> UserPrompt { get; set; }
     public AiConversationCreationOptions CreationOptions { get; set; }
     public List<ICommandData> AttachmentCommands { get; set; }
+    public AiOutputOptions OutputOptions { get; set; }
 
     public DynamicJsonValue ToJson()
     {
@@ -24,6 +25,18 @@ internal class ConversionRequestBody : IDynamicJson
             [nameof(CreationOptions)] = (CreationOptions ?? new AiConversationCreationOptions()).ToJson(),
             [nameof(UserPrompt)] = UserPrompt == null ? null : new DynamicJsonArray(UserPrompt.Select(part => part.ToJson()))
         };
+
+        if (OutputOptions != null)
+        {
+            var opts = new DynamicJsonValue();
+            if (OutputOptions.SampleObject != null)
+                opts[nameof(AiOutputOptions.SampleObject)] = OutputOptions.SampleObject;
+            if (OutputOptions.OutputSchema != null)
+                opts[nameof(AiOutputOptions.OutputSchema)] = OutputOptions.OutputSchema;
+            if (OutputOptions.NoSchema)
+                opts[nameof(AiOutputOptions.NoSchema)] = true;
+            json[nameof(OutputOptions)] = opts;
+        }
 
         return json;
     }

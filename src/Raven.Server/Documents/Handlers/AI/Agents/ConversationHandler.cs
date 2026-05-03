@@ -382,7 +382,7 @@ public partial class ConversationHandler(ServerStore server, DocumentDatabase da
         JsonOperationContext context,
         Talker talker, CancellationToken token)
     {
-        talker.Init();
+        talker.Init(AiSchema.Create(_configuration, _request.OutputOptions));
         var toolsIterations = 0;
 
         // Resolve deferred attachments before talking to the model
@@ -418,7 +418,8 @@ public partial class ConversationHandler(ServerStore server, DocumentDatabase da
                 }
                 isFirstIteration = false;
 
-                _document.AddMessage(context, r.Message, currentTurnUsage);
+                var isNoSchema = r.Type is AiResponseType.Result && talker.OutputSchema.IsStructuredOutput == false ? (bool?)false : null;
+                _document.AddMessage(context, r.Message, currentTurnUsage, isNoSchema);
                 _document.UpdateUsage(talker.AiUsage);
                 OnUpdateUsage?.Invoke(database.Name, currentTurnUsage);
 
@@ -605,10 +606,11 @@ public partial class ConversationHandler(ServerStore server, DocumentDatabase da
 
         var usage = new AiUsage();
         var tools = client.GenerateTools(context, configuration, this);
-        using var request = client.CreateCompletionRequest(context, messages, attachments: null, tools, useTools: false, streaming: false, schema: SummarizationOutputSchema);
-        var result = await client.CompleteAsync(context, request, usage, trace: null, token);
+        var summarizationSchema = AiSchema.Create(agentConfig: null, new AiOutputOptions { OutputSchema = SummarizationOutputSchema });
+        using var request = client.CreateCompletionRequest(context, messages, attachments: null, tools, useTools: false, streaming: false, summarizationSchema);
+        var result = await client.CompleteAsync(context, request, usage, summarizationSchema, trace: null, token);
 
-        if (result.Result.TryGet(nameof(SummarizationSampleObject.Answer), out string messagesSummary) == false)
+        if (result.Result is not BlittableJsonReaderObject resultObj || resultObj.TryGet(nameof(SummarizationSampleObject.Answer), out string messagesSummary) == false)
             throw new UnexpectedResponseException($"Unable to get a summary from response of agent '{oldChat.Agent}'.") { RequestId = null };
 
         oldChat.Messages.Clear();
@@ -1162,7 +1164,7 @@ public partial class ConversationHandler(ServerStore server, DocumentDatabase da
         public string Answer = "Summary of the following chat messages history";
     }
 
-    public virtual DynamicJsonValue GetConversationResponse(JsonOperationContext context, BlittableJsonReaderObject response, int toolsIterations)
+    public virtual DynamicJsonValue GetConversationResponse(JsonOperationContext context, object response, int toolsIterations)
     {
         return new DynamicJsonValue
         {

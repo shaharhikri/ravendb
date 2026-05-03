@@ -10,6 +10,7 @@ using Raven.Client.Documents.AI;
 using Raven.Client.Documents.Operations.AI.Agents;
 using Raven.Client.Exceptions;
 using Raven.Client.Exceptions.Documents.Attachments;
+using Raven.Server.Documents.AI;
 using Raven.Server.Documents.Handlers.Batches;
 using Raven.Server.Documents.Handlers.Processors;
 using Raven.Server.ServerWide;
@@ -126,7 +127,7 @@ namespace Raven.Server.Documents.Handlers.AI.Agents
                 MaxModelIterationsPerCall = maxModelIterationsPerCall
             };
 
-            return new RequestBody
+            var request = new RequestBody
             {
                 ActionResponses = actionResponses,
                 ArtificialActions = artificialActions,
@@ -134,6 +135,26 @@ namespace Raven.Server.Documents.Handlers.AI.Agents
                 Parameters = parameters,
                 CreationOptions = options
             };
+
+            if (body.TryGet(nameof(ConversionRequestBody.OutputOptions), out BlittableJsonReaderObject outputOptions) && outputOptions != null)
+            {
+                var opts = new AiOutputOptions();
+                if (outputOptions.TryGet(nameof(AiOutputOptions.NoSchema), out bool noSchema) && noSchema)
+                {
+                    opts.NoSchema = true;
+                }
+                else if (outputOptions.TryGet(nameof(AiOutputOptions.OutputSchema), out string outputSchema) && string.IsNullOrWhiteSpace(outputSchema) == false)
+                {
+                    opts.OutputSchema = outputSchema;
+                }
+                else if (outputOptions.TryGetMember(nameof(AiOutputOptions.SampleObject), out object sampleObject) && sampleObject != null)
+                {
+                    opts.SampleObject = sampleObject;
+                }
+                request.OutputOptions = opts;
+            }
+
+            return request;
         }
 
         public async Task<RequestBody> ReadRequestBodyAsync(DocumentsOperationContext context, string destinationDocumentId, CancellationToken token)

@@ -226,6 +226,8 @@ internal class AiConversation : IAiConversationOperations
 
     public AiAnswer<TAnswer> Run<TAnswer>() => AsyncHelpers.RunSync(() => RunAsync<TAnswer>());
 
+    public AiAnswer<TAnswer> Run<TAnswer>(AiOutputOptions outputOptions) => AsyncHelpers.RunSync(() => RunAsync<TAnswer>(outputOptions));
+
     public Task<AiAnswer<TAnswer>> StreamAsync<TAnswer>(Expression<Func<TAnswer, string>> streamPropertyPath, Func<string, Task> streamedChunksCallback, CancellationToken token = default)
     {
         return StreamAsync<TAnswer>(streamPropertyPath.ToPropertyPath(_aiOperations._store.Conventions), streamedChunksCallback, token);
@@ -235,19 +237,66 @@ internal class AiConversation : IAiConversationOperations
     {
         while (true)
         {
-            var r = await RunAsyncInternal<TAnswer>(streamPropertyPath, streamedChunksCallback, token).ConfigureAwait(false);
+            var r = await RunAsyncInternal<TAnswer>(streamPropertyPath, streamedChunksCallback, outputOptions: null, token).ConfigureAwait(false);
             if (await HandleServerReplyAsync(r, token).ConfigureAwait(false))
                 return r;
         }
+    }
+
+    public Task<AiAnswer<TAnswer>> StreamAsync<TAnswer>(Expression<Func<TAnswer, string>> streamPropertyPath, Func<string, Task> streamedChunksCallback, AiOutputOptions outputOptions, CancellationToken token = default)
+    {
+        return StreamAsync<TAnswer>(streamPropertyPath.ToPropertyPath(_aiOperations._store.Conventions), streamedChunksCallback, outputOptions, token);
+    }
+
+    public async Task<AiAnswer<TAnswer>> StreamAsync<TAnswer>(string streamPropertyPath, Func<string, Task> streamedChunksCallback, AiOutputOptions outputOptions, CancellationToken token = default)
+    {
+        outputOptions = ValidateOutputOptions<TAnswer>(outputOptions);
+
+        while (true)
+        {
+            var r = await RunAsyncInternal<TAnswer>(streamPropertyPath, streamedChunksCallback, outputOptions, token).ConfigureAwait(false);
+            if (await HandleServerReplyAsync(r, token).ConfigureAwait(false))
+                return r;
+        }
+    }
+
+    public Task<AiAnswer<string>> StreamAsync(Func<string, Task> streamedChunksCallback, CancellationToken token = default)
+    {
+        return StreamAsync<string>((string)null, streamedChunksCallback, new AiOutputOptions { NoSchema = true }, token);
+    }
+
+    public Task<AiAnswer<string>> RunAsync(CancellationToken token = default)
+    {
+        return RunAsync<string>(new AiOutputOptions { NoSchema = true }, token);
+    }
+
+    public AiAnswer<string> Run()
+    {
+        return AsyncHelpers.RunSync(() => RunAsync());
     }
 
     public async Task<AiAnswer<TAnswer>> RunAsync<TAnswer>(CancellationToken token = default)
     {
         _dispatchedToolIds.Clear();
 
+        if (typeof(TAnswer) == typeof(string))
+            return await RunAsync<TAnswer>(new AiOutputOptions { NoSchema = true }, token).ConfigureAwait(false);
+
         while (true)
         {
-            var r = await RunAsyncInternal<TAnswer>(streamPropertyPath: null, streamedChunksCallback: null, token).ConfigureAwait(false);
+            var r = await RunAsyncInternal<TAnswer>(streamPropertyPath: null, streamedChunksCallback: null, outputOptions: null, token).ConfigureAwait(false);
+            if (await HandleServerReplyAsync(r, token).ConfigureAwait(false))
+                return r;
+        }
+    }
+
+    public async Task<AiAnswer<TAnswer>> RunAsync<TAnswer>(AiOutputOptions outputOptions, CancellationToken token = default)
+    {
+        outputOptions = ValidateOutputOptions<TAnswer>(outputOptions);
+
+        while (true)
+        {
+            var r = await RunAsyncInternal<TAnswer>(streamPropertyPath: null, streamedChunksCallback: null, outputOptions, token).ConfigureAwait(false);
             if (await HandleServerReplyAsync(r, token).ConfigureAwait(false))
                 return r;
         }
@@ -293,7 +342,28 @@ internal class AiConversation : IAiConversationOperations
 
     public event Func<UnhandledActionEventArgs, Task> OnUnhandledAction;
 
-    private async Task<AiAnswer<TAnswer>> RunAsyncInternal<TAnswer>(string streamPropertyPath, Func<string, Task> streamedChunksCallback, CancellationToken token = default)
+    private static AiOutputOptions ValidateOutputOptions<TAnswer>(AiOutputOptions outputOptions)
+    {
+        outputOptions ??= new AiOutputOptions();
+
+        if (typeof(TAnswer) == typeof(string))
+        {
+            if (outputOptions.OutputSchema != null || outputOptions.SampleObject != null)
+                throw new InvalidOperationException("When the answer type is a raw string you cannot set an output schema, because the model is expected to return just a string, with no structure. " +
+                                                    $"You can either set {nameof(AiOutputOptions.NoSchema)} to true, or remove the output schema and sample object.");
+
+            outputOptions.NoSchema = true;
+        }
+        else if (outputOptions.NoSchema)
+        {
+            throw new InvalidOperationException($"When {nameof(AiOutputOptions.NoSchema)} is set to true, the answer type cannot be a structured type like '{typeof(TAnswer).Name}'. " +
+                                                $"You can either set {nameof(AiOutputOptions.NoSchema)} to false, or change the answer type to string.");
+        }
+
+        return outputOptions;
+    }
+
+    private async Task<AiAnswer<TAnswer>> RunAsyncInternal<TAnswer>(string streamPropertyPath, Func<string, Task> streamedChunksCallback, AiOutputOptions outputOptions, CancellationToken token = default)
     {
         if (
             // if this is null, it is the first time we call RunAsync, so we are going to the server to get the pending actions
@@ -306,7 +376,7 @@ internal class AiConversation : IAiConversationOperations
                 Status = AiConversationResult.Done
             };
         }
-        var op = new RunConversationOperation<TAnswer>(_agentId, _conversationId, _promptParts, [.. _actionResponses.Values], _artificialActions, _options, _changeVector, _attachmentsCommands, streamPropertyPath, streamedChunksCallback, _debug);
+        var op = new RunConversationOperation<TAnswer>(_agentId, _conversationId, _promptParts, [.. _actionResponses.Values], _artificialActions, _options, _changeVector, _attachmentsCommands, streamPropertyPath, streamedChunksCallback, outputOptions, _debug);
 
         try
         {
