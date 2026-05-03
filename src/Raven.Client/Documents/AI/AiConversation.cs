@@ -216,6 +216,19 @@ internal class AiConversation : IAiConversationOperations
         AddAction(actionName, t.ExecuteAsync);
     }
 
+    public void Handle<TResult>(string actionName, Func<Task<TResult>> action, AiHandleErrorStrategy aiHandleError = AiHandleErrorStrategy.SendErrorsToModel)
+        where TResult : class
+        => Handle<string, TResult>(actionName, (_, __) => action(), aiHandleError);
+
+    public void Handle(string actionName, Func<object> action, AiHandleErrorStrategy aiHandleError = AiHandleErrorStrategy.SendErrorsToModel)
+        => Handle<string>(actionName, (_, __) => action(), aiHandleError);
+
+    public void Receive(string actionName, Func<AiAgentActionRequest, Task> action, AiHandleErrorStrategy aiHandleError = AiHandleErrorStrategy.SendErrorsToModel)
+        => Receive<string>(actionName, (req, _) => action(req), aiHandleError);
+
+    public void Receive(string actionName, Action<AiAgentActionRequest> action, AiHandleErrorStrategy aiHandleError = AiHandleErrorStrategy.SendErrorsToModel)
+        => Receive<string>(actionName, (req, _) => action(req), aiHandleError);
+
     private void AddAction(string actionName, HandleActionDelegate t)
     {
         if (_invocations.ContainsKey(actionName))
@@ -227,6 +240,20 @@ internal class AiConversation : IAiConversationOperations
     public AiAnswer<TAnswer> Run<TAnswer>() => AsyncHelpers.RunSync(() => RunAsync<TAnswer>());
 
     public AiAnswer<TAnswer> Run<TAnswer>(AiOutputOptions outputOptions) => AsyncHelpers.RunSync(() => RunAsync<TAnswer>(outputOptions));
+
+    public Task<AiAnswer<TAnswer>> RunAsync<TAnswer>(TAnswer sampleObject, CancellationToken token = default)
+    {
+        return RunAsync<TAnswer>(new AiOutputOptions { SampleObject = sampleObject }, token);
+    }
+
+    public Task<AiAnswer<TAnswer>> RunAsync<TAnswer>(string schema, CancellationToken token = default)
+    {
+        return RunAsync<TAnswer>(new AiOutputOptions { OutputSchema = schema }, token);
+    }
+
+    public AiAnswer<TAnswer> Run<TAnswer>(TAnswer sampleObject) => AsyncHelpers.RunSync(() => RunAsync<TAnswer>(sampleObject));
+
+    public AiAnswer<TAnswer> Run<TAnswer>(string schema) => AsyncHelpers.RunSync(() => RunAsync<TAnswer>(schema));
 
     public Task<AiAnswer<TAnswer>> StreamAsync<TAnswer>(Expression<Func<TAnswer, string>> streamPropertyPath, Func<string, Task> streamedChunksCallback, CancellationToken token = default)
     {
@@ -268,6 +295,21 @@ internal class AiConversation : IAiConversationOperations
         return StreamAsync<string>(string.Empty, streamedChunksCallback, new AiOutputOptions { NoSchema = true }, token);
     }
 
+    public AiAnswer<TAnswer> Stream<TAnswer>(string streamPropertyPath, Action<string> streamedChunksCallback)
+        => AsyncHelpers.RunSync(() => StreamAsync<TAnswer>(streamPropertyPath, chunk => { streamedChunksCallback(chunk); return Task.CompletedTask; }));
+
+    public AiAnswer<TAnswer> Stream<TAnswer>(Expression<Func<TAnswer, string>> streamPropertyPath, Action<string> streamedChunksCallback)
+        => AsyncHelpers.RunSync(() => StreamAsync<TAnswer>(streamPropertyPath, chunk => { streamedChunksCallback(chunk); return Task.CompletedTask; }));
+
+    public AiAnswer<TAnswer> Stream<TAnswer>(string streamPropertyPath, Action<string> streamedChunksCallback, AiOutputOptions outputOptions)
+        => AsyncHelpers.RunSync(() => StreamAsync<TAnswer>(streamPropertyPath, chunk => { streamedChunksCallback(chunk); return Task.CompletedTask; }, outputOptions));
+
+    public AiAnswer<TAnswer> Stream<TAnswer>(Expression<Func<TAnswer, string>> streamPropertyPath, Action<string> streamedChunksCallback, AiOutputOptions outputOptions)
+        => AsyncHelpers.RunSync(() => StreamAsync<TAnswer>(streamPropertyPath, chunk => { streamedChunksCallback(chunk); return Task.CompletedTask; }, outputOptions));
+
+    public AiAnswer<string> Stream(Action<string> streamedChunksCallback)
+        => AsyncHelpers.RunSync(() => StreamAsync(chunk => { streamedChunksCallback(chunk); return Task.CompletedTask; }));
+
     public Task<AiAnswer<string>> RunAsync(CancellationToken token = default)
     {
         return RunAsync<string>(new AiOutputOptions { NoSchema = true }, token);
@@ -295,6 +337,8 @@ internal class AiConversation : IAiConversationOperations
 
     public async Task<AiAnswer<TAnswer>> RunAsync<TAnswer>(AiOutputOptions outputOptions, CancellationToken token = default)
     {
+        _dispatchedToolIds.Clear();
+
         outputOptions = ValidateOutputOptions<TAnswer>(outputOptions);
 
         while (true)
