@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using FastTests;
 using Newtonsoft.Json;
 using Raven.Client.Documents.AI;
 using Raven.Client.Documents.Operations.AI;
@@ -11,14 +12,10 @@ using Raven.Client.Documents.Operations.ConnectionStrings;
 using Tests.Infrastructure;
 using Xunit;
 
-namespace FastTests.Issues;
+namespace SlowTests.Server.Documents.AI.AiAgent;
 
-public class RavenDB_24824 : RavenTestBase
+public class RavenDB_24824(ITestOutputHelper output) : RavenTestBase(output)
 {
-    public RavenDB_24824(ITestOutputHelper output) : base(output)
-    {
-    }
-
     private class DefaultSchema
     {
         public string Answer { get; set; }
