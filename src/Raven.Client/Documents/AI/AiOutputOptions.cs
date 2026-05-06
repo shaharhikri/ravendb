@@ -1,8 +1,12 @@
 namespace Raven.Client.Documents.AI;
 
 /// <summary>
-/// Controls the output format for a single AI conversation turn,
-/// allowing callers to override the agent's default output schema.
+/// Controls the output format for a single AI conversation turn.
+/// <para>
+/// A default output schema must still be provided when creating the agent (via <c>CreateAgentAsync</c>).
+/// <see cref="AiOutputOptions"/> lets you override that default on a per-call basis — the options set here
+/// take precedence over the agent-level schema for the duration of that turn only.
+/// </para>
 /// </summary>
 public class AiOutputOptions
 {
