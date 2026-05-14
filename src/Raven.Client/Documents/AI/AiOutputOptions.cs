@@ -1,3 +1,5 @@
+using Sparrow.Json.Parsing;
+
 namespace Raven.Client.Documents.AI;
 
 /// <summary>
@@ -8,7 +10,7 @@ namespace Raven.Client.Documents.AI;
 /// take precedence over the agent-level schema for the duration of that turn only.
 /// </para>
 /// </summary>
-public class AiOutputOptions
+public class AiOutputOptions : IDynamicJson
 {
     /// <summary>
     /// A sample object used to generate a JSON schema for structured output.
@@ -29,4 +31,16 @@ public class AiOutputOptions
     /// The LLM returns free-form text instead of JSON conforming to a schema.
     /// </summary>
     public bool NoSchema { get; set; }
+
+    public DynamicJsonValue ToJson()
+    {
+        var json = new DynamicJsonValue();
+        if (SampleObject != null)
+            json[nameof(SampleObject)] = SampleObject;
+        if (OutputSchema != null)
+            json[nameof(OutputSchema)] = OutputSchema;
+        if (NoSchema)
+            json[nameof(NoSchema)] = true;
+        return json;
+    }
 }

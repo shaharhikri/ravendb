@@ -27,16 +27,7 @@ internal class ConversionRequestBody : IDynamicJson
         };
 
         if (OutputOptions != null)
-        {
-            var opts = new DynamicJsonValue();
-            if (OutputOptions.SampleObject != null)
-                opts[nameof(AiOutputOptions.SampleObject)] = OutputOptions.SampleObject;
-            if (OutputOptions.OutputSchema != null)
-                opts[nameof(AiOutputOptions.OutputSchema)] = OutputOptions.OutputSchema;
-            if (OutputOptions.NoSchema)
-                opts[nameof(AiOutputOptions.NoSchema)] = true;
-            json[nameof(OutputOptions)] = opts;
-        }
+            json[nameof(OutputOptions)] = OutputOptions.ToJson();
 
         return json;
     }

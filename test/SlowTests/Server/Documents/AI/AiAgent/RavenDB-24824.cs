@@ -42,7 +42,7 @@ public class RavenDB_24824(ITestOutputHelper output) : RavenTestBase(output)
         public object Content { get; set; }
 
         [JsonProperty("output_schema")]
-        public string OutputSchema { get; set; }
+        public bool? OutputSchema { get; set; }
     }
 
     private static AiAgentConfiguration BuildSimpleAgent(string connectionStringName) =>
@@ -135,10 +135,9 @@ public class RavenDB_24824(ITestOutputHelper output) : RavenTestBase(output)
         Assert.Equal(5, msgs.Count);
 
         Assert.Null(msgs[0].OutputSchema);                          // default: no field
-        Assert.NotNull(msgs[1].OutputSchema);                       // SampleObject: field present
-        Assert.Contains("Summary", msgs[1].OutputSchema);           //   schema reflects SampleObject type
-        Assert.Equal(explicitSchema, msgs[2].OutputSchema);         // ExplicitOutputSchema: stored verbatim
-        Assert.Equal("none", msgs[3].OutputSchema);                 // NoSchema: "none"
+        Assert.Null(msgs[1].OutputSchema);                          // SampleObject override: structured, not stored
+        Assert.Null(msgs[2].OutputSchema);                          // explicit schema override: structured, not stored
+        Assert.Equal(false, msgs[3].OutputSchema);                  // NoSchema: stored as false (not structured)
         Assert.Null(msgs[4].OutputSchema);                          // default again: no contamination
     }
 
