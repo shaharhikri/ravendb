@@ -2,6 +2,7 @@ using System.IO;
 using System.Text;
 using System.Threading.Tasks;
 using FastTests;
+using Raven.Client.Documents.AI;
 using Raven.Client.Documents.Operations.AI;
 using Raven.Server.Documents.AI;
 using Raven.Server.Documents.Handlers.AI.Agents;
@@ -51,7 +52,7 @@ namespace SlowTests.Server.Documents.AI
             using (var stream = new MemoryStream())
             await using (var writer = new AsyncBlittableJsonTextWriter(context, stream))
             {
-                client.WriteCompletionRequestPayload(writer, context, [], [], [], true, false, AiSchema.FromOverride(ChatCompletionClient.EmptySchema));
+                client.WriteCompletionRequestPayload(writer, context, [], [], [], true, false, AiSchema.Create(agentConfig: null, new AiOutputOptions { OutputSchema = ChatCompletionClient.EmptySchema }));
                 await writer.FlushAsync();
                 
                 capturedParameters = Encoding.UTF8.GetString(stream.ToArray());
